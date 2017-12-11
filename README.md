@@ -24,7 +24,7 @@ Or make use of aliases which allow you to match a set of tags, a description, an
 tt alias --key dev.docs --tag Development --tag Documentation --description "Writing documentation for dev work"
 ```
 
-Note that the previous `tt` command example is actually doing more than just adding a description. It is checking to see if the supplied string matches an alias and, if so, using the values associated with that alias key; if no alias is found matching that key, then the string is treated as a task description.
+Note that the previous `tt` command example is actually doing more than just adding a description. It is checking to see if the supplied string matches an alias key and, if so, using the values associated with that alias; if no alias is found matching that key, then the string is treated as a task description.
 
 You can use aliases with the exact same command syntax as above:
 
@@ -32,7 +32,7 @@ You can use aliases with the exact same command syntax as above:
 tt sw dev.docs
 ```
 
-That's the general idea. If these examples seem like this is a tool you're interested in trying, give the rest of the detail use cases a read.
+That's the general idea. If these examples seem like this is a tool you're interested in trying, give the rest of the detailed use cases a read.
 
 ## Installation
 
@@ -58,7 +58,7 @@ The usage of `tt` is pretty straight forward:
   - Example: You start a stopwatch (`tt start`) to work on documentation, but you get an urgent bug report that you want to respond to. Instead of stopping (`tt stop`) and restarting your stopwatch, you can interrupt (`tt interrupt` or `tt i`) it to respond to the bug report, and then resume (`tt resume` or `tt r`) the stopwatch.
   - The choice of not supporting arbitrarily nested interruptions is a workflow one, to encourage less churn in task selection.
 - You can use it as a ledger to record time after the fact.
-  - Example: You keep track of time on a handwritten notepad to take between client sites. At the end of the day, you can record all of those time allocates with `tt track`
+  - Example: You keep track of time on a handwritten notepad to take between client sites. At the end of the day, you can record all of those time allocations with `tt track`
 
   There are two additional commands that allow you to edit time records (`tt amend`) and create aliases for commonly used tasks (`tt alias`) that round out the functionality.
 
@@ -153,11 +153,11 @@ Would produce a time record with the _Development_ and _Documentation_ tags, but
 
 Time records committed to the ledger are not immutable, and changes can be made with `tt amend` which takes the same options as `tt track` without the positional argument. Note that `--id` has a different meaning to `tt amend` as it does in `tt stop`; that is for `tt amend`, the `--id` option is mandatory, and indicates which time record the edits should be applied to.
 
-Values to options given to `tt amend` will **replace** the values on the specified time record with the exception of `--tag` which will **append** to the tags associated with the specified time record.
+Values to options given to `tt amend` will **replace** the values on the specified time record with the exception of `--tag` which will **append** to the tags associated with the specified time record. Any values set in the specified record that are not explicitly overridden on the `tt amend` command line will be left unmodified.
 
 ## Reading the Ledger
 
-Reading records from the ledger can be done with `tt read`, which supports the following options:
+Reading records from the ledger can be done with `tt ls`, which supports the following options:
 
 - `-i`/`--id`
 - `-f`/`--filter`
