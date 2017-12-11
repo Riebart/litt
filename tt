@@ -1,0 +1,350 @@
+#!/usr/bin/env python3
+"""
+Tracking time against various projects from the CLI.
+
+Exit codes:
+
+- 0: Time successfully logged
+- 1: Stopwatch running when 'start' command issued
+- 2: Stopwatch not running when 'stop' command issued
+"""
+
+from __future__ import print_function
+
+import os
+import sys
+import json
+import time
+import argparse
+
+
+def __dotdir():
+    return "%s/.litt" % os.environ.get("HOME", "")
+
+
+def check_dotfile():
+    """
+    Check the dotfiles for an existing database structure.
+    """
+    import os.path
+    try:
+        if os.path.isdir(__dotdir()):
+            if os.path.isfile("%s/events.json" % __dotdir()):
+                return True
+        return False
+    except:  # pylint: disable=W0702
+        return False
+
+
+def init_dotfiles():
+    """
+    Initialize the dotfiles for the first time.
+    """
+    try:
+        os.makedirs(__dotdir(), mode=0o755)
+    except:  # pylint: disable=W0702
+        pass
+
+    with open("%s/events.json" % __dotdir(), "w") as fp:
+        fp.write(
+            json.dumps({
+                "Stopwatch": None,
+                "Aliases": dict(),
+                "Records": dict()
+            }))
+
+
+def load_state():
+    """
+    Load time tracking events from the DB in the dotdirectory.
+    """
+    with open("%s/events.json" % __dotdir(), "r") as fp:
+        return json.loads(fp.read())
+
+
+def write_state(state):
+    """
+    Save time tracking events to the dotfile
+    """
+    with open("%s/events.json" % __dotdir(), "w") as fp:
+        fp.write(json.dumps(state))
+
+
+def start_stopwatch(pargs, state):
+    """
+    Start a stopwatch to track time against a task
+    """
+    if state["Stopwatch"] is not None:
+        print(
+            "Stopwatch currently running, ignoring current request",
+            file=sys.stderr)
+        sys.exit(1)
+
+    cur_time = time.time()
+    record = dict(
+        CommitTime=None,
+        StartTime=cur_time,
+        EndTime=None,
+        Tags=pargs.tag,
+        Description=pargs.description,
+        Detail=pargs.detail,
+    )
+
+    state["Stopwatch"] = record
+
+
+def stop_stopwatch(pargs, state):
+    """
+    Stop the currently running stopwatch.
+    """
+    if state["Stopwatch"] is None:
+        print(
+            "Stopwatch is not currently running, ignoring current request",
+            file=sys.stderr)
+        sys.exit(2)
+
+    if pargs.id is None:
+        pargs.id = time.strftime("%Y%m%d") + (
+            "-%s" % "".join([chr(ord('A') + (c % 26)) for c in os.urandom(4)]))
+
+    record = state["Stopwatch"]
+
+    cur_time = time.time()
+    record["EndTime"] = cur_time
+    record["CommitTime"] = cur_time
+
+    # Delete any tags we're untagging
+    record["Tags"] = list(set(record["Tags"]).difference(set(pargs.untag)))
+
+    if pargs.detail is not None:
+        record["Detail"] = pargs.detail
+
+    if pargs.description is not None:
+        record["Description"] = pargs.description
+
+    state["Stopwatch"] = None
+    state["Records"][pargs.id] = record
+
+    print(pargs.id, )
+
+
+def parse_time(timestr):
+    """
+    Parse the possible human-sensible time string into a Unix timestamp in UTC.
+    """
+    return timestr
+
+
+def track_time(pargs, state):
+    """
+    Track a fixed interval of time
+    """
+
+    # Check the ID passed in for the time record. If it's None, generate a new one based on the
+    # current date/time. This ID is based on the local timezone
+    if pargs.id is None:
+        pargs.id = time.strftime("%Y%m%d") + "-%s" % "".join(
+            [chr(ord('A') + (c % 26)) for c in os.urandom(4)])
+
+    pargs.start_time = parse_time(pargs.start_time)
+    pargs.end_time = parse_time(pargs.end_time)
+
+    state["Records"][pargs.id] = dict(
+        CommitTime=time.time(),
+        StartTime=pargs.start_time,
+        EndTime=pargs.start_time,
+        Tags=pargs.tag,
+        Description=pargs.description,
+        Detail=pargs.detail,
+    )
+
+
+def amend_record(pargs, state):
+    """
+    Amend the properties of a tracked record
+    """
+    pass
+
+
+def set_alias(pargs, state):
+    """
+    Amend the properties of a tracked record
+    """
+    pass
+
+
+def add_shared_args(parser,
+                    constructive,
+                    destructive,
+                    no_id=False,
+                    required_desc=True):
+    """
+    Add a collection of shared arguments to the given parser.
+    """
+    if constructive:
+        if not no_id:
+            parser.add_argument(
+                "-i",
+                "--id",
+                required=False,
+                metavar="<identifier>",
+                default=None,
+                help=
+                """A unique identifier by which the task will be identified. If one is not provided
+                one will be generated. This is output on stdout when the time period is successfully
+                logged.""")
+        parser.add_argument(
+            "-D",
+            "--detail",
+            required=False,
+            default=None,
+            metavar="<detail>",
+            help=
+            """A detailed description of the work done during the time tracked."""
+        )
+        parser.add_argument(
+            "-d",
+            "--description",
+            required=required_desc,
+            metavar="<description>",
+            help=
+            """A short description of the work done during the time tracked."""
+        )
+        parser.add_argument(
+            "-t",
+            "--tag",
+            action="append",
+            required=False,
+            default=[],
+            metavar="<tag>",
+            help=
+            """Include a tag for the tracked unit of time. Specify multiple times to include multiple
+            tags.""")
+    if destructive:
+        parser.add_argument(
+            "-u",
+            "--untag",
+            action="append",
+            required=False,
+            default=[],
+            metavar="<tag>",
+            help="""A remove a tag that exists on the time item""")
+
+
+def __main():
+    if not check_dotfile():
+        print(
+            "Dotfiles are missing, performing first-time setup.",
+            file=sys.stderr)
+        init_dotfiles()
+
+    parser = argparse.ArgumentParser(description="""
+    Track time on projects, tasks, and other items via the CLI.
+    """)
+
+    subparsers = parser.add_subparsers(
+        title="Supported time tracking commands", dest="command")
+
+    add_shared_args(
+        subparsers.add_parser(
+            "start", help="""
+    Start a stopwatch to track time.
+    """),
+        # Constructive command, include all options for creating a new time period
+        True,
+        False,
+        True)
+
+    add_shared_args(
+        subparsers.add_parser(
+            "stop", help="""
+    Stop the running stopwatch.
+    """),
+        # Include all options for both adding new parameters, as well as changing the options from the
+        # 'start'.
+        True,
+        True,
+        False,
+        False)
+
+    cmd = subparsers.add_parser(
+        "track", help="""
+    Track a closed interval of time.
+    """)
+    add_shared_args(
+        cmd,
+        # Constructive command, include all options for creating a new time period
+        True,
+        False)
+    cmd.add_argument(
+        "-s",
+        "--start-time",
+        required=True,
+        metavar="<timespec>",
+        help="""A specification for the start time of the interval to log.""")
+    cmd.add_argument(
+        "-e",
+        "--end-time",
+        required=True,
+        metavar="<timespec>",
+        help="""A specification for the end time of the interval to log.""")
+
+    cmd = subparsers.add_parser(
+        "amend",
+        help="""
+    Amend a given tracked time interval to change one of the parameters.
+    """)
+    cmd.add_argument(
+        "-i",
+        "--id",
+        required=True,
+        metavar="<identifier>",
+        help="""The unique identifier of the time period to amend.""")
+    add_shared_args(
+        cmd,
+        # Provide options to add, remove, or change properties of an existing tracked period.
+        # Do not include the typical --id parameter, as the help text needs to change for this one.
+        True,
+        True,
+        True)
+
+    cmd = subparsers.add_parser(
+        "alias",
+        help="""
+    Create an alias between a string and a set of options. Running this again with the same alias id
+    will overwrite any existing parameters for that alias.
+    """)
+    cmd.add_argument(
+        "-a",
+        "--alias",
+        required=True,
+        metavar="<identifier>",
+        help="""The unique identifier of the alias to set.""")
+    add_shared_args(
+        cmd,
+        # Provide options to add, remove, or change properties of an existing tracked period.
+        # Do not include the typical --id parameter, as the help text needs to change for this one.
+        True,
+        True,
+        True)
+
+    pargs = parser.parse_args()
+
+    state = load_state()
+
+    if pargs.command == "start":
+        start_stopwatch(pargs, state)
+    elif pargs.command == "stop":
+        stop_stopwatch(pargs, state)
+    elif pargs.command == "track":
+        track_time(pargs, state)
+    elif pargs.command == "amend":
+        amend_record(pargs, state)
+    elif pargs.command == "alias":
+        set_alias(pargs, state)
+
+    write_state(state)
+
+
+if __name__ == "__main__":
+    __main()
