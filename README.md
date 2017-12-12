@@ -47,8 +47,9 @@ The time tracking DB, as well as the configuration files, are stored in `~/.litt
 `tt` accepts a few global configuration parameters, which are set persistently using `tt config`, but can be set on a per-use basis by supplying the same options to any other `tt` command (that is, the following options are accepted by any `tt` command, and if given explicitly will override the persistent settings).
 
 - `--output-format`
-    - Accepts one of: `json`, `json-compact`, `human`
+    - Accepts one of: `json`, `json-compact`, `yaml`
     - Defaults to: `json-compact`
+    - Note: `yaml` output is only available if the PyYAML package is installed, and is dynamically detected based on an attempt to import the package.
 
 ## Basic Functionality
 
@@ -77,7 +78,7 @@ A time record, as tracked by `tt`, has several properties:
 - `Description`: A short one-line description of the work performed.
 - `Detail`: A detailed description of the work performed.
 - `Tags`: A collection of strings that are associated with this time record, useful for filtering, grouping, and aggregating. Any number of tags can be attached to a time record.
-- `StructuredData`: A string of data that has some structural interpretation. Internally to `tt` this is just saved as a base64, but this is useful if you have applications that interface with `tt` (such as storing TaskWarrior task IDs, or other information).
+- `StructuredData`: A string of data that has some structural interpretation. Internally to `tt` this is just saved as a base64 string, but this is useful if you have applications that interface with `tt` (such as storing TaskWarrior task IDs, or other information).
 
 ## Using `tt` as a Stopwatch
 
@@ -101,6 +102,7 @@ All of the above commands support the following options:
 - `-d`/`--description`
 - `-t`/`--tag`
 - `-D`/`--detail`
+- `-S`/`--structured-data`
 
 `tt start`, `tt interrupt`, and `tt sw` (when starting a stopwatch) are commands that open a new interval and support one positional argument and these additional options:
 
@@ -125,11 +127,13 @@ There is only one command for using `tt` as a ledger, `tt track`, which takes al
 - `-e`/`--end`
 - `--dryrun`
 
-`--start` and `--end` take any absolute or relative time or date specification, and their values are parsed by the _dateparser_ Python module. If no timezone is given, then the local timezone is assumed.
+`--start` and `--end` take any absolute or relative time or date specification, and their values are parsed by the _dateparser_ Python module. If no timezone is given, then the local timezone is assumed. At least one of `--start` and `--end` must be specified, and if only one is provided then the other is assumed to be the time the command is invoked. It is an error for the value of `--end` to precede (or equal) the value of `--start`.
 
 `--dryrun` is provided to allow you to see the dates and times that are being parsed from your provided date specifications without committing to record to the ledger.
 
 Note that `--id` has the same interpretation here as it does in `tt stop`.
+
+Since `tt interrupted` and `tt resume` are only used with stopwatch time tracking, there is no way to insert interruptions to a block of time added with `tt track`. See the note about [Mutating History](#mutating-history) for suggestions on how you might go about adding interruptions to these blocks of time manually.
 
 ## Aliases
 
@@ -149,11 +153,17 @@ tt start dev.docs -d "Proof-reading documentation"
 
 Would produce a time record with the _Development_ and _Documentation_ tags, but instead of the alias' description, the one provided on the command line will be used.
 
+To view all aliases configured, use `tt alias` without arguments, and to replace an alias run with key _AKey_, use `tt alias --key AKey {Options}`. To remove an alias with key _AKey_, simply overwrite it with a new alias that specifies no options (i.e. `tt alias --key AKey`).
+
 ## Amending Time Records
 
 Time records committed to the ledger are not immutable, and changes can be made with `tt amend` which takes the same options as `tt track` without the positional argument. Note that `--id` has a different meaning to `tt amend` as it does in `tt stop`; that is for `tt amend`, the `--id` option is mandatory, and indicates which time record the edits should be applied to.
 
 Values to options given to `tt amend` will **replace** the values on the specified time record with the exception of `--tag` which will **append** to the tags associated with the specified time record. Any values set in the specified record that are not explicitly overridden on the `tt amend` command line will be left unmodified.
+
+### Mutating History
+
+Note that LITT takes some pointers from Mercurial and does not include significant tools for editing history in complex or detailed ways. For example, interruptions to stopwatch tracked time periods cannot be edited with `tt amend`. Since the authoritative ledger is a JSON file, if you need to do complex edits to history you will want to do so with other tools (such as `jq`), or a text editor.
 
 ## Reading the Ledger
 
