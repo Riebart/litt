@@ -63,12 +63,14 @@ def init_dotfiles():
 
     with open("%s/events.json" % __dotdir(), "w") as ofp:
         ofp.write(
-            json.dumps({
-                "Stopwatch": None,
-                "Interruption": None,
-                "Aliases": dict(),
-                "Records": dict()
-            }, indent=2))
+            json.dumps(
+                {
+                    "Stopwatch": None,
+                    "Interruption": None,
+                    "Aliases": dict(),
+                    "Records": dict()
+                },
+                indent=2))
 
     with open("%s/config.json" % __dotdir(), "w") as ofp:
         ofp.write(json.dumps({"OutputFormat": "json"}, indent=2))
@@ -312,6 +314,7 @@ def cmd_sw(pargs, state, config):
     else:
         cmd_stop(pargs, state, config)
 
+
 def cmd_cancel(pargs, state, config):
     """
     Cancels and cleans up any interruption or stopwatch that are currently active.
@@ -441,6 +444,7 @@ def cmd_amend(pargs, state, config):
     record = __update_record(state["Records"][pargs.id], pargs, state)
     state["Records"][pargs.id] = record
 
+
 def __check_tag_filter(tags, taglist):
     ret = (tags == taglist or list(set(tags).intersection(set(taglist))) != [])
     return ret
@@ -480,10 +484,13 @@ def __filter_records(sieve, records):
 
     return results
 
+
 def __timestamp_to_iso(timestamp):
     from datetime import datetime
     from tzlocal import get_localzone
-    return datetime.fromtimestamp(timestamp).replace(tzinfo=get_localzone()).strftime("%F %T %z")
+    return datetime.fromtimestamp(timestamp).replace(
+        tzinfo=get_localzone()).strftime("%F %T %z")
+
 
 def __csv_format(records, allrecords, pargs):
     from collections import Counter
@@ -498,7 +505,7 @@ def __csv_format(records, allrecords, pargs):
     #
     # For records with interruptions, the time will be subtracted from the Duration value, so
     # the duration may not match the difference between start and end time.
-    
+
     tags = list()
     rows = copy.deepcopy(records)
     for key, val in rows.items():
@@ -506,7 +513,9 @@ def __csv_format(records, allrecords, pargs):
         val["Duration"] = (val["EndTime"] - val["StartTime"]) / 3600
         val["InterruptionDuration"] = 0.0
         for event in val.get("Interruptions", []):
-            val["InterruptionDuration"] += (allrecords[event["Id"]]["EndTime"] - allrecords[event["Id"]]["StartTime"]) / 3600
+            val["InterruptionDuration"] += (
+                allrecords[event["Id"]]["EndTime"] -
+                allrecords[event["Id"]]["StartTime"]) / 3600
         val["Duration"] -= val["InterruptionDuration"] / 3600
         val["StartTime"] = __timestamp_to_iso(val["StartTime"])
         val["EndTime"] = __timestamp_to_iso(val["EndTime"])
@@ -516,31 +525,40 @@ def __csv_format(records, allrecords, pargs):
             for tag in val["Tags"]:
                 val[tag] = "x"
             del val["Tags"]
-    
+
     tag_counts = Counter(tags)
     ignored_tags = [k for k, v in tag_counts.items() if v == len(records)]
-    tag_columns = sorted(list(set(list(tag_counts.keys())).difference(set(ignored_tags))))
+    tag_columns = sorted(
+        list(set(list(tag_counts.keys())).difference(set(ignored_tags))))
 
-    column_names = ["RecordId", "StartTime", "EndTime", "CommitTime", "Duration", "InterruptionDuration", "Description"] + ([] if pargs.without_detail else ["Detail"]) + (["StructuredData"] if pargs.with_structured_data else []) + tag_columns
+    column_names = [
+        "RecordId", "StartTime", "EndTime", "CommitTime", "Duration",
+        "InterruptionDuration", "Description"
+    ] + ([] if pargs.without_detail else
+         ["Detail"]) + (["StructuredData"]
+                        if pargs.with_structured_data else []) + tag_columns
     csv = DictWriter(sys.stdout, column_names)
     csv.writeheader()
-    csv.writerows([
-        {cname: row.get(cname, "") for cname in column_names} for _, row in rows.items()
-    ])
-        
+    csv.writerows([{cname: row.get(cname, "")
+                    for cname in column_names} for _, row in rows.items()])
+
     sys.exit()
+
 
 def cmd_ls(pargs, state, config):
     """
     Retrieve and filter the records based on the input options.
     """
     if pargs.id != []:
-        results = {rid: copy.deepcopy(state["Records"].get(rid, None)) for rid in pargs.id}
+        results = {
+            rid: copy.deepcopy(state["Records"].get(rid, None))
+            for rid in pargs.id
+        }
     else:
         results = copy.deepcopy(state["Records"])
         for sieve in pargs.filter:
             results = __filter_records(sieve, results)
-        
+
         if not pargs.with_structured_data:
             for _, val in results.items():
                 if "StructuredData" in val:
@@ -549,7 +567,7 @@ def cmd_ls(pargs, state, config):
         for _, val in results.items():
             if "Detail" in val:
                 del val["Detail"]
-    
+
     if pargs.csv:
         __csv_format(results, state["Records"], pargs)
     else:
@@ -855,8 +873,7 @@ def __main():  # pylint: disable=R0915
         required=False,
         default=False,
         action="store_true",
-        help=
-        """Exclude the detailed text field in the ouptut.""")
+        help="""Exclude the detailed text field in the ouptut.""")
     __dryrun_option(cmd)
 
     pargs = parser.parse_args()
