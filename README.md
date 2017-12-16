@@ -24,7 +24,7 @@ Or make use of aliases which allow you to match a set of tags, a description, an
 tt alias --key dev.docs --tag Development --tag Documentation --description "Writing documentation for dev work"
 ```
 
-Note that the previous `tt` command example is actually doing more than just adding a description. It is checking to see if the supplied string matches an alias key and, if so, using the values associated with that alias; if no alias is found matching that key, then the string is treated as a task description.
+Note that the previous `tt sw` command example is actually doing more than just adding a description. It is checking to see if the supplied string matches an alias key and, if so, using the values associated with that alias; if no alias is found matching that key, then the string is treated as a task description.
 
 You can use aliases with the exact same command syntax as above:
 
@@ -61,11 +61,11 @@ The usage of `tt` is pretty straight forward:
 - You can use it as a ledger to record time after the fact.
   - Example: You keep track of time on a handwritten notepad to take between client sites. At the end of the day, you can record all of those time allocations with `tt track`
 
-  There are two additional commands that allow you to edit time records (`tt amend`) and create aliases for commonly used tasks (`tt alias`) that round out the functionality.
+There are two additional commands that allow you to edit time records (`tt amend`) and create aliases for commonly used tasks (`tt alias`) that round out the functionality.
 
-  Viewing tracked data is done with `tt ls` which allows for filtering, viewing, and optionally saving the data for use with another application.
+Viewing tracked data is done with `tt ls` which allows for filtering, viewing, and optionally saving the data for use with another application.
 
-  **Note: To support terse interaction, all options have short and long forms, and in many cases positional arguments are supported where the meaning is either unambiguous or can be derived.**
+**Note: To support terse interaction, all options have short and long forms, and in many cases positional arguments are supported where the meaning is either unambiguous or can be derived.**
 
 ## Anatomy of a Time Record
 
@@ -92,27 +92,25 @@ Three are several commands that control the behaviour of `tt` when using it as a
 - `tt sw` will start a stopwatch if one is not running, and will stop a stopwatch if one is currently running.
 - `tt interrupt` (`tt i`) will interrupt a currently running stopwatch (if one is running, otherwise it will act as an alias to `tt start`), which pauses the running stopwatch and starts a new one.
 - `tt resume` (`tt r`) will stop the stopwatch started by `tt interrupt` and resume the stopwatch (if there was one, otherwise it will act as an alias to `tt stop`) that was running when `tt interrupt` was called.
+- `tt cancel` will top the stopwatch (or interruption, if one is running) without committing the record to the ledger (effectively discarding the time). If no stopwatch is running, this operation does nothing. If an interruption is running, the interruption is canceled as though `tt interrupt` was never issued (but otherwise leaves the stopwatch intact). It takes no options.
 
 `tt sw` is a context-aware alias to `tt start` or `tt stop` that will happily do what you tell it to (such as accidentally clobber a running stopwatch if issued by accident), and is provided as a terse alternative for brave users.
 
 `tt start` and `tt stop` are the recommended commands for using the stopwatch, especially to start.
 
-All of the above commands support the following options:
+All of the above commands support the following options as well as exactly one positional argument:
 
 - `-d`/`--description`
 - `-t`/`--tag`
 - `-D`/`--detail`
 - `-S`/`--structured-data`
-
-`tt start`, `tt interrupt`, and `tt sw` (when starting a stopwatch) are commands that open a new interval and support one positional argument and these additional options:
-
 - `-a`/`--alias`
 
 When provided, the positional argument is checked against the list of known alias keys. If an alias key matching the positional argument is found, then the positional argument is treated as the value of `--alias`. If no alias key matching the positional argument is found, then it is treated as the value of `--description`.
 
 For more on aliases, see the [Aliases](#aliases) section.
 
-`tt stop`, `tt resume`, and `tt sw` (when stopping a stopwatch) are commit-level operations, and options specified with these commands override (or add to, in the case of `--tag`) the values of the options given to the corresponding command that started the current stopwatch (or interruption interval). Additionally these commands support the following options:
+`tt stop`, `tt resume`, and `tt sw` (when stopping a stopwatch) are commit-level operations, and options specified with these commands override (or add to, in the case of `--tag`) the values of the options given to the corresponding command that started the current stopwatch (or interruption interval). When the positional argument is provided to these commands, the interpretation is the same as in other stopwatch commands. Additionally these commands support the following options:
 
 - `-i`/`--id`
 - `-u`/`--untag`
@@ -133,7 +131,7 @@ There is only one command for using `tt` as a ledger, `tt track`, which takes al
 
 Note that `--id` has the same interpretation here as it does in `tt stop`.
 
-Since `tt interrupted` and `tt resume` are only used with stopwatch time tracking, there is no way to insert interruptions to a block of time added with `tt track`. See the note about [Mutating History](#mutating-history) for suggestions on how you might go about adding interruptions to these blocks of time manually.
+Since `tt interrupt` and `tt resume` are only used with stopwatch time tracking, there is no way to insert interruptions to a block of time added with `tt track`. See the note about [Mutating History](#mutating-history) for suggestions on how you might go about adding interruptions to these blocks of time manually.
 
 ## Aliases
 
@@ -165,7 +163,7 @@ Values to options given to `tt amend` will **replace** the values on the specifi
 
 Note that LITT takes some pointers from Mercurial and does not include significant tools for editing history in complex or detailed ways. For example, interruptions to stopwatch tracked time periods cannot be edited with `tt amend`. Since the authoritative ledger is a JSON file, if you need to do complex edits to history you will want to do so with other tools (such as `jq`), or a text editor.
 
-## Reading the Ledger
+## Reading and Displaying the Ledger
 
 Reading records from the ledger can be done with `tt ls`, which supports the following options:
 
@@ -185,8 +183,8 @@ The `--csv` option takes no arguments, and will generate a time-sheet-style CSV,
 The `--filter` option can be specified multiple times, and records **must match all filters to be contained in the output**. The `--filter` options takes one of the following filters:
 
 - `tag: {comma separated list of tags treated as OR}`
-- `start: {<,<=,==,>=,>}{timespec}`
-- `end: {<,<=,==,>=,>}{timespec}`
+- `start_time: {<,<=,==,>=,>}{timespec}`
+- `end_time: {<,<=,==,>=,>}{timespec}`
 - `description: {regular expression the description should match}`
 - `detail: {regular expression the description should match}`
 

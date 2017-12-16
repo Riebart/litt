@@ -18,6 +18,7 @@ Exit codes:
 
 from __future__ import print_function
 
+import re
 import os
 import sys
 import copy
@@ -66,10 +67,10 @@ def init_dotfiles():
                 "Interruption": None,
                 "Aliases": dict(),
                 "Records": dict()
-            }))
+            }, indent=2))
 
     with open("%s/config.json" % __dotdir(), "w") as ofp:
-        ofp.write(json.dumps({"OutputFormat": "json"}))
+        ofp.write(json.dumps({"OutputFormat": "json"}, indent=2))
 
 
 def __write_output(obj, pargs, config):
@@ -100,7 +101,7 @@ def __write_state(state):
     Save time tracking events to the dotfile
     """
     with open("%s/events.json" % __dotdir(), "w") as ofp:
-        ofp.write(json.dumps(state))
+        ofp.write(json.dumps(state, indent=2))
 
 
 def __write_config(config):
@@ -108,7 +109,7 @@ def __write_config(config):
     Save the configuration to the persistent file for future invocations.
     """
     with open("%s/config.json" % __dotdir(), "w") as ofp:
-        ofp.write(json.dumps(config))
+        ofp.write(json.dumps(config, indent=2))
 
 
 def cmd_base(pargs, state, config):
@@ -310,6 +311,15 @@ def cmd_sw(pargs, state, config):
     else:
         cmd_stop(pargs, state, config)
 
+def cmd_cancel(pargs, state, config):
+    """
+    Cancels and cleans up any interruption or stopwatch that are currently active.
+    """
+    if state["Interruption"] is not None:
+        state["Interruption"] = None
+    elif state["Stopwatch"] is None:
+        state["Stopwatch"] = None
+
 
 def cmd_interrupt(pargs, state, config):
     """
@@ -354,11 +364,7 @@ def cmd_resume(pargs, state, config):
         record = __update_record(state["Interruption"], pargs, state)
         state["Records"][pargs.id] = record
         state["Interruption"] = None
-        state["Stopwatch"]["Interruptions"].append(
-            dict(
-                Id=pargs.id,
-                StartTime=record["StartTime"],
-                EndTime=record["EndTime"]))
+        state["Stopwatch"]["Interruptions"].append(dict(Id=pargs.id))
         __write_output(pargs.id, pargs, config)
 
 
@@ -433,6 +439,13 @@ def cmd_amend(pargs, state, config):
     # from the ledger.
     record = __update_record(state["Records"][pargs.id], pargs, state)
     state["Records"][pargs.id] = record
+
+
+def cmd_ls(pargs, state, config):
+    """
+    Retrieve and filter the records based on the input options.
+    """
+    pass
 
 
 def __positional_argument(parser):
@@ -546,6 +559,34 @@ def __dryrun_option(parser):
     )
 
 
+class RecordFilter(object):
+    """
+    Encodes the logic that dictates what is, and is not, a valid filter.
+    """
+
+    def __init__(self, filter_string):
+        try:
+            match = re.match(
+                "^(tag|start_time|end_time|description|detail): (.*)$",
+                filter_string)
+            prop = match.group(1)
+
+            if prop == "tag":
+                pass
+            elif prop == "start_time":
+                pass
+            elif prop == "end_time":
+                pass
+            elif prop == "description":
+                pass
+            elif prop == "detail":
+                pass
+        except:  # pylint: disable=W0702
+            print(
+                "Supplied filter string does not match the provided syntax.",
+                file=sys.stderr)
+
+
 def __main():  # pylint: disable=R0915
     if not check_dotfile():
         print(
@@ -586,6 +627,13 @@ def __main():  # pylint: disable=R0915
     __property_options(cmd)
     __alias_option(cmd)
     __commit_time_options(cmd)
+
+    ################ tt cancel
+    cmd = subparsers.add_parser(
+        "cancel",
+        help="""
+    Stop the currently running stopwatch or interruption without committing the time to the ledger.
+    """)
 
     ################ tt start
     cmd = subparsers.add_parser(
@@ -666,9 +714,59 @@ def __main():  # pylint: disable=R0915
         "-k",
         "--key",
         required=False,
-        metavar="<timespec>",
+        metavar="<alias key>",
         help="""A specification for the start time of the interval to log.""")
     __property_options(cmd)
+
+    ################ tt ls
+    cmd = subparsers.add_parser(
+        "ls",
+        help="""
+    List and filter the reports based on the filters provided, and format the output in a useful
+    way.""")
+    cmd.add_argument(
+        "-i",
+        "--id",
+        required=False,
+        metavar="<identifier>",
+        default=[],
+        action="append",
+        help=
+        """A unique identifier for the specific report to retrieve. Can be repeated multiple
+        times.""")
+    cmd.add_argument(
+        "-f",
+        "--filter",
+        required=False,
+        metavar="<filter spec>",
+        default=[],
+        action="append",
+        help=
+        """A unique identifier for the specific report to retrieve. Can be repeated multiple
+        times.""")
+    cmd.add_argument(
+        "-o",
+        "--outfile",
+        required=False,
+        metavar="<path to output file>",
+        help="""The path to the file that output should be directed to.""")
+    cmd.add_argument(
+        "-c",
+        "--csv",
+        required=False,
+        action="store_true",
+        help=
+        """Indicates that the results should be output in a CSV suitable for an Excel timesheet"""
+    )
+    cmd.add_argument(
+        "-w",
+        "--with-structured-data",
+        required=False,
+        action="store_true",
+        help=
+        """Include structured data, if present, for each record. The default is not to include the
+        structured data properties.""")
+    __dryrun_option(cmd)
 
     pargs = parser.parse_args()
 
@@ -686,6 +784,8 @@ def __main():  # pylint: disable=R0915
         cmd_stop(pargs, state, config)
     elif pargs.command == "sw":
         cmd_sw(pargs, state, config)
+    elif pargs.command == "cancel":
+        cmd_cancel(pargs, state, config)
     elif pargs.command in ["i", "interrupt"]:
         cmd_interrupt(pargs, state, config)
     elif pargs.command in ["r", "resume"]:
@@ -694,6 +794,8 @@ def __main():  # pylint: disable=R0915
         cmd_track(pargs, state, config)
     elif pargs.command == "amend":
         cmd_amend(pargs, state, config)
+    elif pargs.command == "ls":
+        cmd_ls(pargs, state, config)
 
     __write_state(state)
 
