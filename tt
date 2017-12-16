@@ -89,20 +89,20 @@ def __human_alias(alias):
 
 
 def __seconds_to_hhmm(seconds):
-    return "%d:%02d" % (seconds // 3600, (seconds % 3600) // 60)
+    return "%dh %02d" % (seconds // 3600, (seconds % 3600) // 60)
 
 
 def __human_record(record):
     ret = ""
     if "StartTime" in record:
-        ret += "Record started at: %s\n" % record["StartTime"]
+        ret += "Record started at: %s\n" % __timestamp_to_iso(record["StartTime"])
     if "EndTime" in record:
         if record["EndTime"] is None:
             ret += "Recording is still ongoing.\n"
             ret += "Elapsed wall-clock time: %s\n" % __seconds_to_hhmm(
                 __parse_time("now") - record["StartTime"])
         else:
-            ret += "Record ended at: %s\n" % record["EndTime"]
+            ret += "Record ended at: %s\n" % __timestamp_to_iso(record["EndTime"])
             ret += "Elapsed wall-clock time: %s\n" % __seconds_to_hhmm(
                 record["EndTime"] - record["StartTime"])
     if "Description" in record:
