@@ -142,7 +142,7 @@ def __write_output(obj, pargs, config, human_hint):
         elif human_hint.startswith("Record"):
             # This will always be a dictionary mapping alias keys to parameter sets.
             for key, alias in obj.items():
-                print("Alias \"%s\"" % key)
+                print("Record \"%s\"" % key)
                 print(__human_record(alias))
         else:
             raise ValueError("Undefined human hint '%s'" % human_hint)
