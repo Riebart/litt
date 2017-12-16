@@ -24,11 +24,12 @@ import sys
 import copy
 import json
 import time
+import base64
 from argparse import ArgumentParser
 
 try:
     import yaml
-except:  # pylint: disable=W0702
+except ImportError:
     pass
 
 
@@ -156,7 +157,7 @@ def cmd_alias(pargs, state, config):
         if pargs.detail is not None:
             alias["Detail"] = pargs.detail
         if pargs.structured_data is not None:
-            alias["StructuredData"] = pargs.structured_data
+            alias["StructuredData"] = base64.b64encode(pargs.structured_data)
         if pargs.tag != []:
             alias["Tags"] = pargs.tag
 
