@@ -169,12 +169,12 @@ Reading records from the ledger can be done with `tt ls`, which supports the fol
 
 - `-i`/`--id`
 - `-f`/`--filter`
-- `-o`/`--outfile`
 - `-c`/`--csv`
 - `-w`/`--with-structured-data`
+- `-D`/`--without-detail`
 - `--dryrun`
 
-By default, the structured data is not included in the output, however this can be changed with `--with-structured-data` (which leaves it in the base64 encoded form).
+By default, the structured data is not included in the output, however this can be changed with `--with-structured-data` (which leaves it in the base64 encoded form). Similarly, the `--without-detail` option will omit the detailed text field (`Detail`) from the output, useful for summary tables or reports where the CSV output is being consumed directly (and not being send to another application for processing.)
 
 If `--id` is given then only the exact specified time record is returned, and any values of `--filter` and the presence of `--csv` are ignored.
 
