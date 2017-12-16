@@ -487,10 +487,15 @@ def cmd_ls(pargs, state, config):
         __write_output([state["Records"].get(rid, None) for rid in pargs.id], pargs, config)
         return
 
-    results = state["Records"]
+    results = copy.deepcopy(state["Records"])
     for sieve in pargs.filter:
         results = __filter_records(sieve, results)
     
+    if not pargs.with_structured_data:
+        for _, val in results.items():
+            if "StructuredData" in val:
+                del val["StructuredData"]
+
     __write_output(results, pargs, config)
 
 
@@ -781,6 +786,7 @@ def __main():  # pylint: disable=R0915
         "-w",
         "--with-structured-data",
         required=False,
+        default=False,
         action="store_true",
         help=
         """Include structured data, if present, for each record. The default is not to include the
@@ -788,6 +794,7 @@ def __main():  # pylint: disable=R0915
     __dryrun_option(cmd)
 
     pargs = parser.parse_args()
+    print(pargs)
 
     state, config = __load_state()
 
