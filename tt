@@ -76,7 +76,47 @@ def init_dotfiles():
         ofp.write(json.dumps({"OutputFormat": "json"}, indent=2))
 
 
-def __write_output(obj, pargs, config):
+def __human_alias(alias):
+    # An alias has a limited number of properties right now:
+    ret = ""
+    if "Description" in alias:
+        ret += "    Description: %s\n" % alias["Description"]
+    if "Tags" in alias:
+        ret += "     Tags: %s\n" % ",".join(alias["Tags"])
+    if "Detail" in alias:
+        ret += "     Details:\n    %s\n" % alias["Detail"]
+    return ret
+
+
+def __seconds_to_hhmm(seconds):
+    return "%d:%02d" % (seconds // 3600, (seconds % 3600) // 60)
+
+
+def __human_record(record):
+    ret = ""
+    if "StartTime" in record:
+        ret += "Record started at: %s\n" % record["StartTime"]
+    if "EndTime" in record:
+        if record["EndTime"] is None:
+            ret += "Recording is still ongoing.\n"
+            ret += "Elapsed wall-clock time: %s\n" % __seconds_to_hhmm(
+                __parse_time("now") - record["StartTime"])
+        else:
+            ret += "Record ended at: %s\n" % record["EndTime"]
+            ret += "Elapsed wall-clock time: %s\n" % __seconds_to_hhmm(
+                record["EndTime"] - record["StartTime"])
+    if "Description" in record:
+        ret += "Description: %s\n" % record["Description"]
+    if "Tags" in record:
+        ret += "Tags: %s\n" % ",".join(record["Tags"])
+    if "Detail" in record:
+        ret += "Details:\n    %s\n" % record["Detail"]
+    if "StructuredData" in record:
+        ret += "StructuredData:\n    %s\n" % record["StructuredData"]
+    return ret + "\n"
+
+
+def __write_output(obj, pargs, config, human_hint):
     fmt = config[
         "OutputFormat"] if pargs.output_format is None else pargs.output_format
     if fmt == "json":
@@ -85,6 +125,28 @@ def __write_output(obj, pargs, config):
         print(json.dumps(obj, sort_keys=True))
     elif fmt == "yaml":
         print(yaml.dump(obj, default_flow_style=False).strip())
+    elif fmt == "human":
+        # For human readable output, we need to know what the human hint is.
+        if human_hint == "ID":
+            # It's just an ID string, so just print it out saying so.
+            print("Committed Record ID: %s" % obj)
+        elif human_hint == "Config":
+            # It is the configuration object, so print it in pseudo-yaml
+            for k, v in obj.items():
+                print("%s: %s" % (str(k), str(v)))
+        elif human_hint.startswith("Alias"):
+            # This will always be a dictionary mapping alias keys to parameter sets.
+            for key, alias in obj.items():
+                print("Alias \"%s\"" % key)
+                print(__human_alias(alias))
+        elif human_hint.startswith("Record"):
+            if isinstance(obj, list):
+                for o in obj:
+                    print(__human_record(o))
+            else:
+                print(__human_record(obj))
+        else:
+            raise ValueError("Undefined human hint '%s'" % human_hint)
 
 
 def __load_state():
@@ -120,9 +182,10 @@ def cmd_base(pargs, state, config):
     Print out the status of any currently running stopwatch or interruption timer.
     """
     if state["Stopwatch"] is not None:
-        __write_output(state["Stopwatch"], pargs, config)
+        __write_output(state["Stopwatch"], pargs, config, "Record.Incomplete")
         if state["Interruption"] is not None:
-            __write_output(state["Interruption"], pargs, config)
+            __write_output(state["Interruption"], pargs, config,
+                           "Record.Incomplete")
 
 
 def cmd_config(pargs, _, config):
@@ -137,7 +200,7 @@ def cmd_config(pargs, _, config):
     # If all supported options are None (that is, unspecified), then just print the current
     # configuration
     if set(opts.values()) == set([None]):
-        __write_output(config, pargs, config)
+        __write_output(config, pargs, config, "Config")
     # Otherwise, for those that are not None, update the values, and write them back to the file.
     else:
         for key, val in opts.items():
@@ -151,7 +214,7 @@ def cmd_alias(pargs, state, config):
     Create, modify, delete, and list aliases.
     """
     if pargs.key is None:
-        __write_output(state["Aliases"], pargs, config)
+        __write_output(state["Aliases"], pargs, config, "Alias.List")
     else:
         alias = dict()
         if pargs.description is not None:
@@ -299,7 +362,7 @@ def cmd_stop(pargs, state, config):
     state["Stopwatch"] = None
     state["Records"][pargs.id] = record
 
-    __write_output(pargs.id, pargs, config)
+    __write_output(pargs.id, pargs, config, "ID")
 
 
 def cmd_sw(pargs, state, config):
@@ -369,7 +432,7 @@ def cmd_resume(pargs, state, config):
         state["Records"][pargs.id] = record
         state["Interruption"] = None
         state["Stopwatch"]["Interruptions"].append(dict(Id=pargs.id))
-        __write_output(pargs.id, pargs, config)
+        __write_output(pargs.id, pargs, config, "ID")
 
 
 def __parse_time(timespec):
@@ -423,11 +486,11 @@ def cmd_track(pargs, state, config):
     record["CommitTime"] = cur_time
 
     if pargs.dryrun:
-        __write_output(record, pargs, config)
+        __write_output(record, pargs, config, "Record.Complete")
     else:
         state["Records"][pargs.id] = record
 
-    __write_output(pargs.id, pargs, config)
+    __write_output(pargs.id, pargs, config, "ID")
 
 
 def cmd_amend(pargs, state, config):
@@ -571,7 +634,7 @@ def cmd_ls(pargs, state, config):
     if pargs.csv:
         __csv_format(results, state["Records"], pargs)
     else:
-        __write_output(results, pargs, config)
+        __write_output(results, pargs, config, "Record.Complete.List")
 
 
 def __positional_argument(parser):
@@ -699,7 +762,7 @@ def __main():  # pylint: disable=R0915
     parser.add_argument(
         "--output-format",
         required=False,
-        choices=(["json", "json-compact"] +
+        choices=(["human", "json", "json-compact"] +
                  (["yaml"] if "yaml" in sys.modules.keys() else [])),
         default=None,
         help="""
