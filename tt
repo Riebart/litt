@@ -140,10 +140,13 @@ def __write_output(obj, pargs, config, human_hint):
                 print("Alias \"%s\"" % key)
                 print(__human_alias(alias))
         elif human_hint.startswith("Record"):
-            # This will always be a dictionary mapping alias keys to parameter sets.
-            for key, alias in obj.items():
-                print("Record \"%s\"" % key)
-                print(__human_record(alias))
+            # This will always be a dictionary, but may sometimes be a bare record.
+            if "StartTime" in obj:
+                print(__human_record(obj))
+            else:
+                for key, alias in obj.items():
+                    print("Record \"%s\"" % key)
+                    print(__human_record(alias))
         else:
             raise ValueError("Undefined human hint '%s'" % human_hint)
 
