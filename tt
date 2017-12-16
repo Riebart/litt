@@ -440,12 +440,58 @@ def cmd_amend(pargs, state, config):
     record = __update_record(state["Records"][pargs.id], pargs, state)
     state["Records"][pargs.id] = record
 
+def __check_tag_filter(tags, taglist):
+    ret = (tags == taglist or list(set(tags).intersection(set(taglist))) != [])
+    return ret
+
+
+def __check_timespec_filter(timestamp, timespeclist):
+    for timespec in timespeclist:
+        dto = __parse_time(timespec["Timespec"])
+        if eval(repr(timestamp) + timespec["Condition"] + repr(dto)):
+            return True
+    return False
+
+
+def __check_regex_filter(stringval, regexlist):
+    if stringval is None:
+        return False
+    for pattern in regexlist:
+        if re.search(pattern, stringval):
+            return True
+    return False
+
+
+def __filter_records(sieve, records):
+    filters = {
+        "Tags": __check_tag_filter,
+        "StartTime": __check_timespec_filter,
+        "EndTime": __check_timespec_filter,
+        "Description": __check_regex_filter,
+        "Detail": __check_regex_filter
+    }
+
+    results = dict()
+    for record_id, record in records.items():
+        for k, v in filters.items():
+            if k in record and k in sieve and v(record[k], sieve[k]):
+                results[record_id] = record
+
+    return results
 
 def cmd_ls(pargs, state, config):
     """
     Retrieve and filter the records based on the input options.
     """
-    pass
+    if pargs.id != []:
+        __write_output([state["Records"].get(rid, None) for rid in pargs.id], pargs, config)
+        return
+
+    results = state["Records"]
+    for sieve in pargs.filter:
+        results = __filter_records(sieve, results)
+    
+    __write_output(results, pargs, config)
 
 
 def __positional_argument(parser):
@@ -557,34 +603,6 @@ def __dryrun_option(parser):
         help=
         """Print out the interpreted date-time values parsed from the given arguments."""
     )
-
-
-class RecordFilter(object):
-    """
-    Encodes the logic that dictates what is, and is not, a valid filter.
-    """
-
-    def __init__(self, filter_string):
-        try:
-            match = re.match(
-                "^(tag|start_time|end_time|description|detail): (.*)$",
-                filter_string)
-            prop = match.group(1)
-
-            if prop == "tag":
-                pass
-            elif prop == "start_time":
-                pass
-            elif prop == "end_time":
-                pass
-            elif prop == "description":
-                pass
-            elif prop == "detail":
-                pass
-        except:  # pylint: disable=W0702
-            print(
-                "Supplied filter string does not match the provided syntax.",
-                file=sys.stderr)
 
 
 def __main():  # pylint: disable=R0915
@@ -740,6 +758,7 @@ def __main():  # pylint: disable=R0915
         required=False,
         metavar="<filter spec>",
         default=[],
+        type=json.loads,
         action="append",
         help=
         """A unique identifier for the specific report to retrieve. Can be repeated multiple

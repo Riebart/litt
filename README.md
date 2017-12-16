@@ -180,12 +180,54 @@ If `--id` is given then only the exact specified time record is returned, and an
 
 The `--csv` option takes no arguments, and will generate a time-sheet-style CSV, with each record on a line, and one column per tag (with marks in the appropriate rows and columns indicating which records were tagged in which way). This overrides any setting of `--output-format`, either persistent or on the command line.
 
-The `--filter` option can be specified multiple times, and records **must match all filters to be contained in the output**. The `--filter` options takes one of the following filters:
+The `--filter` option can be specified multiple times, and records **must match all filters to be contained in the output (that is separate filters are combined with a logical AND)**. The `--filter` options takes JSON documents that describe the filters, with conditinos specified in the same JSON documenting being combined with a logical OR (that is, a record matching ANY condition in a single `--filter` expression will be returned, but final results must pass every expression provided with a `--filter` option)
 
-- `tag: {comma separated list of tags treated as OR}`
-- `start_time: {<,<=,==,>=,>}{timespec}`
-- `end_time: {<,<=,==,>=,>}{timespec}`
-- `description: {regular expression the description should match}`
-- `detail: {regular expression the description should match}`
+```json
+{
+  "Tags": [ "string", ... ],
+  "StartTime": [ 
+    {
+      "Condition": "<"|"<="|"=="|">="|">"|"!=",
+      "Timespec": "string"
+    },
+    ...
+  ],
+  "EndTime": [ 
+    {
+      "Condition": "<"|"<="|"=="|">="|">"|"!=",
+      "Timespec": "string"
+    },
+    ...
+  ],
+  "Description": [ r"regex", ... ],
+  "Detail": [ r"regex", ... ]
+}
+```
+
+For the tag-based filtering, for a given record to match, the set of tags attached to the record must have a non-empty intersection with the given list of tags, or the two sets must be equal (this permits finding untagged records by asking for an empty tag list).
+
+For regular expression based matching, the python `re.search` function is used, which allows matching patterns anywhere in the given string if no anchors are specified.
 
 As with `tt track`, the timespecs passed to these filters are parsed by `dateparser`, and so can be relative or absolute. As with `tt track`, `--dryrun` is provided to provide transparency in how your timespecs are being parsed.
+
+### Examples
+
+Find all of the untagged records.
+
+```
+tt ls --filter '{"Tags": []}'
+```
+
+Find all of the records tagged with both *Personal* and *Gardening*:
+
+```
+tt ls --filter '{"Tags": ["Personal"])' --filter '{"Tags": ["Gardening"]}'
+```
+
+Finding all of the records tagged with *Work* since the start of the work week, not counting anything in progress.
+
+```
+tt ls --filter '{"StartTime":[{"Condition": ">=", "Timespec": "monday"}]}' \
+      --filter '{"EndTime":[{"Condition": "<=", "Timespec": "now"}]}' \
+      --filter '{"Tags": ["Work"]}'
+```
