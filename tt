@@ -334,9 +334,16 @@ def __generate_id(state):
 
 
 def __update_record(old_record_prototype, pargs, state):
+    # Given an input record, use the values in the pargs value to update any values in the old
+    # record, and replace the old record values.
+
+    # Given the pargs value, create the record for it, and then throw away any keys that have a
+    # value of None (the sentinel for "not supplied"; don't clobber a value in the old record that
+    # was unspecified in the new one).
     new_record = dict([(k, v)
                        for k, v in __create_record(pargs, state).items()
                        if v is not None])
+    
     del new_record["StartTime"]
     old_record = copy.deepcopy(old_record_prototype)
     new_record["Tags"] = list(
@@ -506,7 +513,20 @@ def cmd_amend(pargs, state, config):
 
     # If the ID exists, create a new record from the arguments, and then clobber the record pulled
     # from the ledger.
-    record = __update_record(state["Records"][pargs.id], pargs, state)
+    old_record = state["Records"][pargs.id]
+    record = __update_record(old_record, pargs, state)
+
+    # Reset the timestamps in the record to what the original record was, then we'll replace as
+    # necessary based on what is provided in the pargs attributes.
+    record["StartTime"] = old_record["StartTime"]
+    record["EndTime"] = old_record["EndTime"]
+
+    # Fix the weirdness that's going to go on with the timestamps
+    if pargs.start_time is not None:
+        record["StartTime"] = __parse_time(pargs.start_time)
+    if pargs.end_time is not None:
+        record["EndTime"] = __parse_time(pargs.end_time)
+
     state["Records"][pargs.id] = record
 
 
