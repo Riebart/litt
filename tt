@@ -846,7 +846,7 @@ def __main():  # pylint: disable=R0915
     __property_options(cmd)
     __alias_option(cmd)
     __commit_time_options(cmd)
-    __timespec_options(cmd, True, False)
+    __timespec_options(cmd, False, True)
 
     ################ tt interrupt
     cmd = subparsers.add_parser(
