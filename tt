@@ -318,6 +318,8 @@ def cmd_start(pargs, state, _):
         sys.exit(1)
 
     record = __create_record(pargs, state)
+    if pargs.start_time is not None:
+        record["StartTime"] = __parse_time(pargs.start_time)
     record["EndTime"] = None
     record["CommitTime"] = None
     record["Interruptions"] = []
@@ -368,6 +370,8 @@ def cmd_stop(pargs, state, config):
 
     record = __update_record(state["Stopwatch"], pargs, state)
 
+    if pargs.end_time is not None:
+        record["EndTime"] = __parse_time(pargs.end_time)
     state["Stopwatch"] = None
     state["Records"][pargs.id] = record
 
@@ -393,7 +397,7 @@ def cmd_cancel(pargs, state, config):
     """
     if state["Interruption"] is not None:
         state["Interruption"] = None
-    elif state["Stopwatch"] is None:
+    else:
         state["Stopwatch"] = None
 
 
@@ -746,21 +750,24 @@ def __commit_time_options(parser):
     )
 
 
-def __timespec_options(parser):
-    parser.add_argument(
-        "-s",
-        "--start-time",
-        required=False,
-        default=None,
-        metavar="<timespec>",
-        help="""A specification for the start time of the interval to log.""")
-    parser.add_argument(
-        "-e",
-        "--end-time",
-        required=False,
-        default=None,
-        metavar="<timespec>",
-        help="""A specification for the end time of the interval to log.""")
+def __timespec_options(parser, start=True, end=True):
+    if start:
+        parser.add_argument(
+            "-s",
+            "--start-time",
+            required=False,
+            default=None,
+            metavar="<timespec>",
+            help="""A specification for the start time of the interval to log.""")
+
+    if end:
+        parser.add_argument(
+            "-e",
+            "--end-time",
+            required=False,
+            default=None,
+            metavar="<timespec>",
+            help="""A specification for the end time of the interval to log.""")
 
 
 def __dryrun_option(parser):
@@ -813,6 +820,7 @@ def __main():  # pylint: disable=R0915
     __property_options(cmd)
     __alias_option(cmd)
     __commit_time_options(cmd)
+    __timespec_options(cmd)
 
     ################ tt cancel
     cmd = subparsers.add_parser(
@@ -828,6 +836,7 @@ def __main():  # pylint: disable=R0915
     """)
     __property_options(cmd)
     __alias_option(cmd)
+    __timespec_options(cmd, True, False)
 
     ################ tt stop
     cmd = subparsers.add_parser(
@@ -837,6 +846,7 @@ def __main():  # pylint: disable=R0915
     __property_options(cmd)
     __alias_option(cmd)
     __commit_time_options(cmd)
+    __timespec_options(cmd, True, False)
 
     ################ tt interrupt
     cmd = subparsers.add_parser(
