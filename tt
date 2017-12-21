@@ -14,6 +14,7 @@ Exit codes:
 - 7: Attempt to log a finite interval where the start does not strictly precede the end
 - 8: Unable to parse a given timespec
 - 9: Attempt to edit a record with an ID that doesn't exist.
+- 10: A hook failed to execute properly
 """
 
 from __future__ import print_function
@@ -25,6 +26,7 @@ import copy
 import json
 import time
 import base64
+from os.path import isdir, isfile
 from argparse import ArgumentParser
 
 try:
@@ -34,6 +36,7 @@ except ImportError:
 
 
 def __dotdir():
+    # TODO: This is Linux specific
     return "%s/.litt" % os.environ.get("HOME", "")
 
 
@@ -41,7 +44,6 @@ def check_dotfile():
     """
     Check the dotfiles for an existing database structure.
     """
-    from os.path import isdir, isfile
     try:
         if isdir(__dotdir()):
             if isfile("%s/events.json" % __dotdir()):
@@ -70,10 +72,58 @@ def init_dotfiles():
                     "Aliases": dict(),
                     "Records": dict()
                 },
-                indent=2))
+                indent=2, sort_keys=True))
 
     with open("%s/config.json" % __dotdir(), "w") as ofp:
-        ofp.write(json.dumps({"OutputFormat": "json"}, indent=2))
+        ofp.write(json.dumps({"OutputFormat": "json"}, indent=2, sort_keys=True))
+
+
+def load_hooks():
+    """
+    List all files in the hook directories, and determine which are suitable for execution as hook
+    events.
+    """
+    from os import listdir, access, X_OK
+    hooks = dict(
+        pre_load=list(),
+        pre_commit=list(),
+        post_commit=list(),
+        pre_config_write=list(),
+        post_config_write=list())
+
+    for hook_key, binaries in hooks.items():
+        try:
+            for hookfile in listdir("%s/hooks/%s" % (__dotdir(), hook_key)):
+                hook_fullpath = "%s/hooks/%s/%s" % (__dotdir(), hook_key,
+                                                    hookfile)
+                if isfile(hook_fullpath) and access(hook_fullpath, X_OK):
+                    binaries.append(hook_fullpath)
+        except FileNotFoundError:  # pylint: disable=E0602
+            pass
+
+    return hooks
+
+
+def run_hooks(hookevent, hooks, data):
+    """
+    Run all hooks for a given event name, passing the JSON serialized data into the hook on stdin.
+    """
+    import subprocess
+    for hookfile in hooks[hookevent]:
+        proc = subprocess.Popen(
+            (hookfile, hookevent),
+            stdout=subprocess.PIPE,
+            stdin=subprocess.PIPE,
+            cwd=__dotdir())
+        proc.stdin.write(json.dumps(data, sort_keys=True).encode("utf-8"))
+        stdout, _ = proc.communicate()
+
+        if proc.returncode != 0:
+            print(
+                "%s hook returned non-zero, aborting." % hookevent,
+                file=sys.stderr)
+            print(stdout.decode("utf-8"))
+            sys.exit(10)
 
 
 def __human_alias(alias):
@@ -163,20 +213,24 @@ def __load_state():
     return state, config
 
 
-def __write_state(state):
+def __write_state(state, hooks):
     """
     Save time tracking events to the dotfile
     """
+    run_hooks("pre_commit", hooks, state)
     with open("%s/events.json" % __dotdir(), "w") as ofp:
-        ofp.write(json.dumps(state, indent=2))
+        ofp.write(json.dumps(state, indent=2, sort_keys=True))
+    run_hooks("post_commit", hooks, state)
 
 
-def __write_config(config):
+def __write_config(config, hooks):
     """
     Save the configuration to the persistent file for future invocations.
     """
+    run_hooks("pre_config_write", hooks, config)
     with open("%s/config.json" % __dotdir(), "w") as ofp:
-        ofp.write(json.dumps(config, indent=2))
+        ofp.write(json.dumps(config, indent=2, sort_keys=True))
+    run_hooks("post_config_write", hooks, config)
 
 
 def cmd_base(pargs, state, config):
@@ -190,7 +244,7 @@ def cmd_base(pargs, state, config):
                            "Record.Incomplete")
 
 
-def cmd_config(pargs, _, config):
+def cmd_config(pargs, _, config, hooks):
     """
     Handle configuration commands include printing the configuration and updating values.
     """
@@ -208,7 +262,7 @@ def cmd_config(pargs, _, config):
         for key, val in opts.items():
             if val is not None:
                 config[options[key]] = val
-        __write_config(config)
+        __write_config(config, hooks)
 
 
 def cmd_alias(pargs, state, config):
@@ -345,7 +399,7 @@ def __update_record(old_record_prototype, pargs, state):
     new_record = dict([(k, v)
                        for k, v in __create_record(pargs, state).items()
                        if v is not None])
-    
+
     del new_record["StartTime"]
     old_record = copy.deepcopy(old_record_prototype)
     new_record["Tags"] = list(
@@ -982,12 +1036,15 @@ def __main():  # pylint: disable=R0915
 
     pargs = parser.parse_args()
 
+    hooks = load_hooks()
+    run_hooks("pre_load", hooks, None)
+
     state, config = __load_state()
 
     if pargs.command is None:
         cmd_base(pargs, state, config)
     elif pargs.command == "config":
-        cmd_config(pargs, state, config)
+        cmd_config(pargs, state, config, hooks)
     elif pargs.command == "alias":
         cmd_alias(pargs, state, config)
     elif pargs.command == "start":
@@ -1009,7 +1066,7 @@ def __main():  # pylint: disable=R0915
     elif pargs.command == "ls":
         cmd_ls(pargs, state, config)
 
-    __write_state(state)
+    __write_state(state, hooks)
 
 
 if __name__ == "__main__":
