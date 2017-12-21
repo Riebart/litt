@@ -98,6 +98,7 @@ def load_hooks():
                                                     hookfile)
                 if isfile(hook_fullpath) and access(hook_fullpath, X_OK):
                     binaries.append(hook_fullpath)
+            binaries.sort()
         except FileNotFoundError:  # pylint: disable=E0602
             pass
 
