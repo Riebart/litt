@@ -15,6 +15,7 @@ Exit codes:
 - 8: Unable to parse a given timespec
 - 9: Attempt to edit a record with an ID that doesn't exist.
 - 10: A hook failed to execute properly
+- 11: A dryrun was specified.
 """
 
 from __future__ import print_function
@@ -26,7 +27,7 @@ import copy
 import json
 import time
 import base64
-from os.path import isdir, isfile
+from os.path import isdir, isfile # pylint: disable=C0412
 from argparse import ArgumentParser
 
 try:
@@ -218,10 +219,8 @@ def __write_state(state, hooks):
     """
     Save time tracking events to the dotfile
     """
-    run_hooks("pre_commit", hooks, state)
     with open("%s/events.json" % __dotdir(), "w") as ofp:
         ofp.write(json.dumps(state, indent=2, sort_keys=True))
-    run_hooks("post_commit", hooks, state)
 
 
 def __write_config(config, hooks):
@@ -244,6 +243,8 @@ def cmd_base(pargs, state, config):
             __write_output(state["Interruption"], pargs, config,
                            "Record.Incomplete")
 
+    return None
+
 
 def cmd_config(pargs, _, config, hooks):
     """
@@ -265,14 +266,18 @@ def cmd_config(pargs, _, config, hooks):
                 config[options[key]] = val
         __write_config(config, hooks)
 
+    return None
+
 
 def cmd_alias(pargs, state, config):
     """
     Create, modify, delete, and list aliases.
     """
+    images = None
     if pargs.key is None:
         __write_output(state["Aliases"], pargs, config, "Alias.List")
     else:
+        images = dict()
         alias = dict()
         if pargs.description is not None:
             alias["Description"] = pargs.description
@@ -283,6 +288,10 @@ def cmd_alias(pargs, state, config):
         if pargs.tag != []:
             alias["Tags"] = pargs.tag
 
+        # Track the old image, which is the old alias config. If the alias doesn't exist yet, then
+        # the old image value is None
+        images ["OldImage"] = state["Aliases"].get(pargs.key, None)
+
         # Because len(alias) == 0 as a condition is against PEP8. We were essentially checking that
         # the dictionary had stuff in it, so if it DOES NOT have stuff in it...
         if not alias:
@@ -290,6 +299,9 @@ def cmd_alias(pargs, state, config):
                 del state["Aliases"][pargs.key]
         else:
             state["Aliases"][pargs.key] = alias
+            images["NewImage"] = alias
+
+    return images
 
 
 def __resolve_positional_arg(pargs, state):
@@ -379,6 +391,7 @@ def cmd_start(pargs, state, _):
     record["CommitTime"] = None
     record["Interruptions"] = []
     state["Stopwatch"] = record
+    return None
 
 
 def __generate_id(state):
@@ -432,6 +445,9 @@ def cmd_stop(pargs, state, config):
 
     __write_output(pargs.id, pargs, config, "ID")
 
+    # Return the images, with None for the old image.
+    return dict(OldImage=None, NewImage={pargs.id: record})
+
 
 def cmd_sw(pargs, state, config):
     """
@@ -441,9 +457,9 @@ def cmd_sw(pargs, state, config):
     # Since this is essentially just start or stop, but context sensitive, determine if there is
     # a stopwatch running, and call the right function.
     if state["Stopwatch"] is None:
-        cmd_start(pargs, state, config)
+        return cmd_start(pargs, state, config)
     else:
-        cmd_stop(pargs, state, config)
+        return cmd_stop(pargs, state, config)
 
 
 def cmd_cancel(pargs, state, config):
@@ -501,6 +517,8 @@ def cmd_resume(pargs, state, config):
         state["Interruption"] = None
         state["Stopwatch"]["Interruptions"].append(dict(Id=pargs.id))
         __write_output(pargs.id, pargs, config, "ID")
+        # Return the images, with None for the old image.
+        return dict(OldImage=None, NewImage={pargs.id: record})
 
 
 def __parse_time(timespec):
@@ -555,10 +573,13 @@ def cmd_track(pargs, state, config):
 
     if pargs.dryrun:
         __write_output(record, pargs, config, "Record.Complete")
+        sys.exit(11)
     else:
         state["Records"][pargs.id] = record
 
     __write_output(pargs.id, pargs, config, "ID")
+    # Return the images, with None for the old image.
+    return dict(OldImage=None, NewImage={pargs.id: record})
 
 
 def cmd_amend(pargs, state, config):
@@ -572,6 +593,8 @@ def cmd_amend(pargs, state, config):
 
     # If the ID exists, create a new record from the arguments, and then clobber the record pulled
     # from the ledger.
+    images = dict()
+    images["OldImage"] = copy.deepcopy(state["Records"][pargs.id])
     old_record = state["Records"][pargs.id]
     record = __update_record(old_record, pargs, state)
 
@@ -586,7 +609,10 @@ def cmd_amend(pargs, state, config):
     if pargs.end_time is not None:
         record["EndTime"] = __parse_time(pargs.end_time)
 
+    images["NewImage"] = record
     state["Records"][pargs.id] = record
+
+    return images
 
 
 def __check_tag_filter(tags, taglist):
@@ -699,7 +725,7 @@ def cmd_ls(pargs, state, config):
     if pargs.id != []:
         results = {
             rid: copy.deepcopy(state["Records"].get(rid, None))
-            for rid in pargs.id
+            for rid in pargs.id if rid in state["Records"]
         }
     else:
         results = copy.deepcopy(state["Records"])
@@ -719,6 +745,8 @@ def cmd_ls(pargs, state, config):
         __csv_format(results, state["Records"], pargs)
     else:
         __write_output(results, pargs, config, "Record.Complete.List")
+
+    return None
 
 
 def __positional_argument(parser):
@@ -1042,32 +1070,38 @@ def __main():  # pylint: disable=R0915
 
     state, config = __load_state()
 
-    if pargs.command is None:
-        cmd_base(pargs, state, config)
-    elif pargs.command == "config":
-        cmd_config(pargs, state, config, hooks)
-    elif pargs.command == "alias":
-        cmd_alias(pargs, state, config)
-    elif pargs.command == "start":
-        cmd_start(pargs, state, config)
-    elif pargs.command == "stop":
-        cmd_stop(pargs, state, config)
-    elif pargs.command == "sw":
-        cmd_sw(pargs, state, config)
-    elif pargs.command == "cancel":
-        cmd_cancel(pargs, state, config)
-    elif pargs.command in ["i", "interrupt"]:
-        cmd_interrupt(pargs, state, config)
-    elif pargs.command in ["r", "resume"]:
-        cmd_resume(pargs, state, config)
-    elif pargs.command == "track":
-        cmd_track(pargs, state, config)
-    elif pargs.command == "amend":
-        cmd_amend(pargs, state, config)
-    elif pargs.command == "ls":
-        cmd_ls(pargs, state, config)
+    # When records are added, edited, or removed, the images (OldImage and NewImage) are kept
+    # for passing into the hooks.
+    images = None
 
+    if pargs.command is None:
+        images = cmd_base(pargs, state, config)
+    elif pargs.command == "config":
+        images = cmd_config(pargs, state, config, hooks)
+    elif pargs.command == "alias":
+        images = cmd_alias(pargs, state, config)
+    elif pargs.command == "start":
+        images = cmd_start(pargs, state, config)
+    elif pargs.command == "stop":
+        images = cmd_stop(pargs, state, config)
+    elif pargs.command == "sw":
+        images = cmd_sw(pargs, state, config)
+    elif pargs.command == "cancel":
+        images = cmd_cancel(pargs, state, config)
+    elif pargs.command in ["i", "interrupt"]:
+        images = cmd_interrupt(pargs, state, config)
+    elif pargs.command in ["r", "resume"]:
+        images = cmd_resume(pargs, state, config)
+    elif pargs.command == "track":
+        images = cmd_track(pargs, state, config)
+    elif pargs.command == "amend":
+        images = cmd_amend(pargs, state, config)
+    elif pargs.command == "ls":
+        images = cmd_ls(pargs, state, config)
+
+    run_hooks("pre_commit", hooks, images)
     __write_state(state, hooks)
+    run_hooks("post_commit", hooks, images)
 
 
 if __name__ == "__main__":
