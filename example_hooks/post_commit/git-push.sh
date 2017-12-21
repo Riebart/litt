@@ -9,9 +9,15 @@
 set -e
 
 git add events.json config.json
-git commit -m "`date +%F_%T`"
 
-if [ "`git remote`" != "" ] # If there's a remote, try to pull
-then 
-    git push -q
+# If there are changes to any tracked files, then commit.
+if [ "`git status --untracked=no -s`" != "" ]
+then
+    git commit -m "`date +%F_%T`"
+
+    # If there's a remote and we've committed changes, push
+    if [ "`git remote`" != "" ]
+    then 
+        git push -q
+    fi
 fi
