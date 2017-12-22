@@ -290,16 +290,17 @@ def cmd_alias(pargs, state, config):
 
         # Track the old image, which is the old alias config. If the alias doesn't exist yet, then
         # the old image value is None
-        images ["OldImage"] = state["Aliases"].get(pargs.key, None)
+        images["OldImage"] = {pargs.key: state["Aliases"].get(pargs.key, None)}
 
         # Because len(alias) == 0 as a condition is against PEP8. We were essentially checking that
         # the dictionary had stuff in it, so if it DOES NOT have stuff in it...
         if not alias:
             if pargs.key in state["Aliases"]:
                 del state["Aliases"][pargs.key]
+            images["NewImage"] = {pargs.key: None}
         else:
             state["Aliases"][pargs.key] = alias
-            images["NewImage"] = alias
+            images["NewImage"] = {pargs.key: alias}
 
     return images
 
@@ -594,7 +595,7 @@ def cmd_amend(pargs, state, config):
     # If the ID exists, create a new record from the arguments, and then clobber the record pulled
     # from the ledger.
     images = dict()
-    images["OldImage"] = copy.deepcopy(state["Records"][pargs.id])
+    images["OldImage"] = {pargs.id: copy.deepcopy(state["Records"][pargs.id])}
     old_record = state["Records"][pargs.id]
     record = __update_record(old_record, pargs, state)
 
@@ -609,7 +610,7 @@ def cmd_amend(pargs, state, config):
     if pargs.end_time is not None:
         record["EndTime"] = __parse_time(pargs.end_time)
 
-    images["NewImage"] = record
+    images["NewImage"] = {pargs.id: record}
     state["Records"][pargs.id] = record
 
     return images
