@@ -116,15 +116,17 @@ def run_hooks(hookevent, hooks, data):
             (hookfile, hookevent),
             stdout=subprocess.PIPE,
             stdin=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             cwd=__dotdir())
         proc.stdin.write(json.dumps(data, sort_keys=True).encode("utf-8"))
-        stdout, _ = proc.communicate()
+        stdout, stderr = proc.communicate()
 
         if proc.returncode != 0:
             print(
                 "%s hook returned non-zero, aborting." % hookevent,
                 file=sys.stderr)
             print(stdout.decode("utf-8"))
+            print(stderr.decode("utf-8"))
             sys.exit(10)
 
 
