@@ -67,6 +67,10 @@ Viewing tracked data is done with `tt ls` which allows for filtering, viewing, a
 
 **Note: To support terse interaction, all options have short and long forms, and in many cases positional arguments are supported where the meaning is either unambiguous or can be derived.**
 
+## Advanced functionality
+
+The Python script supports the execution of arbitrary executables at specific points in the logic, called _hooks_. See the section on [Hooks](#hooks) for more information.
+
 ## Anatomy of a Time Record
 
 A time record, as tracked by `tt`, has several properties:
@@ -231,3 +235,48 @@ tt ls --filter '{"StartTime":[{"Condition": ">=", "Timespec": "monday"}]}' \
       --filter '{"EndTime":[{"Condition": "<=", "Timespec": "now"}]}' \
       --filter '{"Tags": ["Work"]}'
 ```
+
+## Hooks
+
+Hooks are executable files placed in the subdirectories of `~/.litt/hooks`, where the subdirectory is named for the hook event that it should be invoked on. Files found in a hook directory are executed in lexicographical order. When hook events are fired and executables are invoked, the hook event name is passed as the first, and only, command line parameter. Additionally, any contextual information is passed in as JSON on stdin; which information this is is indicated below. Supported hook events are:
+
+- `pre_load`: Before the JSON DB file is loaded from disk
+  - Context: `null`
+- `pre_commit`: After all changes are made to the state, but before the state is written to disk.
+  - Context: The old and new images of any changed items.
+    - For Aliases (if the OldImage value is `null`, then the alias did not exist before this command; if the NewImage value is `null` then the alias was deleted by the command run):
+    ```
+    {
+      "OldImage": {
+        "AliasKey": {
+          ...<properties>
+        }
+      },
+      "NewImage": {
+        "AliasKey": {
+          ...<properties>
+        }
+      }
+    }
+    ```
+    - For Records (if the OldImage value is `null`, then the alias did not exist before this command; if the NewImage value is `null` then the alias was deleted by the command run):
+    ```
+    {
+      "OldImage": {
+        "RecordId": {
+          ...<properties>
+        }
+      },
+      "NewImage": {
+        "RecordId": {
+          ...<properties>
+        }
+      }
+    }
+    ```
+- `post_commit`: After all changes are made to the state, and after the state is written to disk.
+  - Context: Same as `pre_commit`
+- `pre_config_write`: After all changes are made to the persistent configuration, but before the config is written to disk.
+  - Context: `null`
+- `post_config_write`: After all changes are made to the persistent configuration, and after the config is written to disk.
+  - Context: `null`
