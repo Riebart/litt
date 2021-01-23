@@ -27,7 +27,8 @@ import copy
 import json
 import time
 import base64
-from os.path import isdir, isfile # pylint: disable=C0412
+from os.path import isdir, isfile  # pylint: disable=C0412
+from os.path import join as pathjoin  # pylint: disable=C0412
 from argparse import ArgumentParser
 
 try:
@@ -37,8 +38,10 @@ except ImportError:
 
 
 def __dotdir():
-    # TODO: This is Linux specific
-    return "%s/.litt" % os.environ.get("HOME", "")
+    if sys.platform == "win32":
+        return pathjoin(os.environ.get("HOMEDRIVE", ""), os.environ.get("HOMEPATH", ""), ".litt")
+    else:
+        return pathjoin(os.environ.get("HOME", ""), ".litt")
 
 
 def check_dotfile():
@@ -73,10 +76,12 @@ def init_dotfiles():
                     "Aliases": dict(),
                     "Records": dict()
                 },
-                indent=2, sort_keys=True))
+                indent=2,
+                sort_keys=True))
 
     with open("%s/config.json" % __dotdir(), "w") as ofp:
-        ofp.write(json.dumps({"OutputFormat": "json"}, indent=2, sort_keys=True))
+        ofp.write(
+            json.dumps({"OutputFormat": "json"}, indent=2, sort_keys=True))
 
 
 def load_hooks():
@@ -85,12 +90,11 @@ def load_hooks():
     events.
     """
     from os import listdir, access, X_OK
-    hooks = dict(
-        pre_load=list(),
-        pre_commit=list(),
-        post_commit=list(),
-        pre_config_write=list(),
-        post_config_write=list())
+    hooks = dict(pre_load=list(),
+                 pre_commit=list(),
+                 post_commit=list(),
+                 pre_config_write=list(),
+                 post_config_write=list())
 
     for hook_key, binaries in hooks.items():
         try:
@@ -112,19 +116,17 @@ def run_hooks(hookevent, hooks, data):
     """
     import subprocess
     for hookfile in hooks[hookevent]:
-        proc = subprocess.Popen(
-            (hookfile, hookevent),
-            stdout=subprocess.PIPE,
-            stdin=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            cwd=__dotdir())
+        proc = subprocess.Popen((hookfile, hookevent),
+                                stdout=subprocess.PIPE,
+                                stdin=subprocess.PIPE,
+                                stderr=subprocess.PIPE,
+                                cwd=__dotdir())
         proc.stdin.write(json.dumps(data, sort_keys=True).encode("utf-8"))
         stdout, stderr = proc.communicate()
 
         if proc.returncode != 0:
-            print(
-                "%s hook returned non-zero, aborting." % hookevent,
-                file=sys.stderr)
+            print("%s hook returned non-zero, aborting." % hookevent,
+                  file=sys.stderr)
             print(stdout.decode("utf-8"))
             print(stderr.decode("utf-8"))
             sys.exit(10)
@@ -149,14 +151,16 @@ def __seconds_to_hhmm(seconds):
 def __human_record(record):
     ret = ""
     if "StartTime" in record:
-        ret += "Record started at: %s\n" % __timestamp_to_iso(record["StartTime"])
+        ret += "Record started at: %s\n" % __timestamp_to_iso(
+            record["StartTime"])
     if "EndTime" in record:
         if record["EndTime"] is None:
             ret += "Recording is still ongoing.\n"
             ret += "Elapsed wall-clock time: %s\n" % __seconds_to_hhmm(
                 __parse_time("now") - record["StartTime"])
         else:
-            ret += "Record ended at: %s\n" % __timestamp_to_iso(record["EndTime"])
+            ret += "Record ended at: %s\n" % __timestamp_to_iso(
+                record["EndTime"])
             ret += "Elapsed wall-clock time: %s\n" % __seconds_to_hhmm(
                 record["EndTime"] - record["StartTime"])
     if "Description" in record:
@@ -382,9 +386,8 @@ def cmd_start(pargs, state, _):
     Start a stopwatch to track time against a task
     """
     if state["Stopwatch"] is not None:
-        print(
-            "Stopwatch currently running, ignoring current request",
-            file=sys.stderr)
+        print("Stopwatch currently running, ignoring current request",
+              file=sys.stderr)
         sys.exit(1)
 
     record = __create_record(pargs, state)
@@ -431,9 +434,8 @@ def cmd_stop(pargs, state, config):
     Start a stopwatch to track time against a task
     """
     if state["Stopwatch"] is None:
-        print(
-            "Stopwatch not currently running, ignoring current request",
-            file=sys.stderr)
+        print("Stopwatch not currently running, ignoring current request",
+              file=sys.stderr)
         sys.exit(2)
 
     if pargs.id is None:
@@ -501,16 +503,14 @@ def cmd_resume(pargs, state, config):
     Resume an interrupted stopwatch by cleaning up and writing the event to the ledger.
     """
     if state["Stopwatch"] is None:
-        print(
-            "Unable to resume from interruption with no stopwatch running.",
-            file=sys.stderr)
+        print("Unable to resume from interruption with no stopwatch running.",
+              file=sys.stderr)
         sys.exit(4)
     else:
         # Confirm that the interruption that's most recent exists and is indeed still open
         if state["Interruption"] is None:
-            print(
-                "Unable to resume without an open interruption.",
-                file=sys.stderr)
+            print("Unable to resume without an open interruption.",
+                  file=sys.stderr)
             sys.exit(5)
         # Since there's an open interruption, close it out.
         if pargs.id is None:
@@ -529,9 +529,8 @@ def __parse_time(timespec):
     from tzlocal import get_localzone
     dto = datetimeparser(timespec)
     if dto is None:
-        print(
-            "Unable to parse your timespec \"%s\"." % timespec,
-            file=sys.stderr)
+        print("Unable to parse your timespec \"%s\"." % timespec,
+              file=sys.stderr)
         sys.exit(8)
     if dto.tzinfo is None:
         return dto.replace(tzinfo=get_localzone()).timestamp()
@@ -707,9 +706,8 @@ def __csv_format(records, allrecords, pargs):
     column_names = [
         "RecordId", "StartTime", "EndTime", "CommitTime", "Duration",
         "InterruptionDuration", "Description"
-    ] + ([] if pargs.without_detail else
-         ["Detail"]) + (["StructuredData"]
-                        if pargs.with_structured_data else []) + tag_columns
+    ] + ([] if pargs.without_detail else ["Detail"]) + (
+        ["StructuredData"] if pargs.with_structured_data else []) + tag_columns
     csv = DictWriter(sys.stdout, column_names)
     csv.writeheader()
     csv.writerows([{cname: row.get(cname, "")
@@ -844,7 +842,8 @@ def __timespec_options(parser, start=True, end=True):
             required=False,
             default=None,
             metavar="<timespec>",
-            help="""A specification for the start time of the interval to log.""")
+            help=
+            """A specification for the start time of the interval to log.""")
 
     if end:
         parser.add_argument(
@@ -853,7 +852,8 @@ def __timespec_options(parser, start=True, end=True):
             required=False,
             default=None,
             metavar="<timespec>",
-            help="""A specification for the end time of the interval to log.""")
+            help="""A specification for the end time of the interval to log."""
+        )
 
 
 def __dryrun_option(parser):
@@ -868,9 +868,8 @@ def __dryrun_option(parser):
 
 def __main():  # pylint: disable=R0915
     if not check_dotfile():
-        print(
-            "Dotfiles are missing, performing first-time setup.",
-            file=sys.stderr)
+        print("Dotfiles are missing, performing first-time setup.",
+              file=sys.stderr)
         init_dotfiles()
 
     ################ tt
@@ -891,16 +890,14 @@ def __main():  # pylint: disable=R0915
         title="Supported time tracking commands", dest="command")
 
     ################ tt config
-    subparsers.add_parser(
-        "config",
-        help="""
+    subparsers.add_parser("config",
+                          help="""
     Set or dump persistent configuration values.
     """)
 
     ################ tt sw
-    cmd = subparsers.add_parser(
-        "sw",
-        help="""
+    cmd = subparsers.add_parser("sw",
+                                help="""
     Start or stop a stopwatch based on whether one is running or not
     """)
     __property_options(cmd)
@@ -909,15 +906,14 @@ def __main():  # pylint: disable=R0915
     __timespec_options(cmd)
 
     ################ tt cancel
-    cmd = subparsers.add_parser(
-        "cancel",
-        help="""
+    cmd = subparsers.add_parser("cancel",
+                                help="""
     Stop the currently running stopwatch or interruption without committing the time to the ledger.
     """)
 
     ################ tt start
-    cmd = subparsers.add_parser(
-        "start", help="""
+    cmd = subparsers.add_parser("start",
+                                help="""
     Start a stopwatch to track time.
     """)
     __property_options(cmd)
@@ -925,8 +921,8 @@ def __main():  # pylint: disable=R0915
     __timespec_options(cmd, True, False)
 
     ################ tt stop
-    cmd = subparsers.add_parser(
-        "stop", help="""
+    cmd = subparsers.add_parser("stop",
+                                help="""
     Stop the running stopwatch.
     """)
     __property_options(cmd)
@@ -943,15 +939,16 @@ def __main():  # pylint: disable=R0915
     __alias_option(cmd)
 
     ################ tt resume
-    cmd = subparsers.add_parser(
-        "resume", aliases=["r"], help="""Resume an interrupted stopwatch.""")
+    cmd = subparsers.add_parser("resume",
+                                aliases=["r"],
+                                help="""Resume an interrupted stopwatch.""")
     __property_options(cmd)
     __alias_option(cmd)
     __commit_time_options(cmd)
 
     ################ tt track
-    cmd = subparsers.add_parser(
-        "track", help="""Track a closed interval of time.""")
+    cmd = subparsers.add_parser("track",
+                                help="""Track a closed interval of time.""")
     __timespec_options(cmd)
     __property_options(cmd)
     __alias_option(cmd)
@@ -986,9 +983,8 @@ def __main():  # pylint: disable=R0915
     __dryrun_option(cmd)
 
     ################ tt alias
-    cmd = subparsers.add_parser(
-        "alias",
-        help="""
+    cmd = subparsers.add_parser("alias",
+                                help="""
     Create an alias between a string and a set of options. Running this again with the same alias id
     will overwrite any existing parameters for that alias.
     """)
@@ -1001,17 +997,15 @@ def __main():  # pylint: disable=R0915
     __property_options(cmd)
 
     ################ tt ls
-    cmd = subparsers.add_parser(
-        "ls",
-        help="""
+    cmd = subparsers.add_parser("ls",
+                                help="""
     List and filter the reports based on the filters provided, and format the output in a useful
     way.""")
     cmd.add_argument(
         default=None,
         nargs="?",
         dest="pos_id",
-        help=
-        """Positional argument for quickly specifying a single ID.""")
+        help="""Positional argument for quickly specifying a single ID.""")
     cmd.add_argument(
         "-i",
         "--id",
@@ -1057,13 +1051,12 @@ def __main():  # pylint: disable=R0915
         help=
         """Include structured data, if present, for each record. The default is not to include the
         structured data properties.""")
-    cmd.add_argument(
-        "-D",
-        "--without-detail",
-        required=False,
-        default=False,
-        action="store_true",
-        help="""Exclude the detailed text field in the ouptut.""")
+    cmd.add_argument("-D",
+                     "--without-detail",
+                     required=False,
+                     default=False,
+                     action="store_true",
+                     help="""Exclude the detailed text field in the ouptut.""")
     __dryrun_option(cmd)
 
     pargs = parser.parse_args()
