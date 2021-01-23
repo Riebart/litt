@@ -8,19 +8,19 @@ Using `tt` can be extremely terse, and could even be bound to a keyboard macro b
 
 The following command will start a stopwatch, if one isn't currently running, or stop the currently running stopwatch.
 
-```
+```text
 tt sw
 ```
 
 Note that since you have not supplied any information about _what_ you were doing during that time, it cannot fill it in however you can amend these recorded time periods after the fact with more detail. If you want to supply information about what you are doing, you can either supply a description explicitly, as in:
 
-```
+```text
 tt sw "Writing documentation"
 ```
 
 Or make use of aliases which allow you to match a set of tags, a description, and other information to a string. You can create an alias with the following:
 
-```
+```text
 tt alias --key dev.docs --tag Development --tag Documentation --description "Writing documentation for dev work"
 ```
 
@@ -28,7 +28,7 @@ Note that the previous `tt sw` command example is actually doing more than just 
 
 You can use aliases with the exact same command syntax as above:
 
-```
+```text
 tt sw dev.docs
 ```
 
@@ -38,18 +38,18 @@ That's the general idea. If these examples seem like this is a tool you're inter
 
 LITT makes use of the Python `dateparser` package, so you'll need to install that either from pip or your OS packages.
 
-The script is Python2.7/Python3 compatible.
+Full package dependencies are in [requirements.txt](requirements.txt).
 
-The time tracking DB, as well as the configuration files, are stored in `~/.litt`.
+The time tracking DB, as well as the configuration files, are stored in `~/.litt` on Linux, and `%HOMEDRIVE%\%HOMEPATH\.litt` on Windows.
 
 ## Configuration
 
 `tt` accepts a few global configuration parameters, which are set persistently using `tt config`, but can be set on a per-use basis by supplying the same options to any other `tt` command (that is, the following options are accepted by any `tt` command, and if given explicitly will override the persistent settings).
 
 - `--output-format`
-    - Accepts one of: `json`, `json-compact`, `yaml`
-    - Defaults to: `json-compact`
-    - Note: `yaml` output is only available if the PyYAML package is installed, and is dynamically detected based on an attempt to import the package.
+  - Accepts one of: `json`, `json-compact`, `yaml`
+  - Defaults to: `json-compact`
+  - Note: `yaml` output is only available if the PyYAML package is installed, and is dynamically detected based on an attempt to import the package.
 
 ## Basic Functionality
 
@@ -141,7 +141,7 @@ Since `tt interrupt` and `tt resume` are only used with stopwatch time tracking,
 
 Aliases are ways of pairing commonly used options (description, detail, tags, etc...) with a shorter, easily remembered key. Recall the example from above:
 
-```
+```text
 tt alias --key dev.docs --tag Development --tag Documentation --description "Writing documentation for dev work"
 ```
 
@@ -149,7 +149,7 @@ This alias can now be referenced in any of `tt start`, `tt interrupt`, or `tt sw
 
 When a valid alias key is given to a command, the properties defined by the alias are set first, and if any other options are provided, those values override the value set by the alias. For example, using the above alias:
 
-```
+```text
 tt start dev.docs -d "Proof-reading documentation"
 ```
 
@@ -184,19 +184,19 @@ If `--id` is given then only the exact specified time record is returned, and an
 
 The `--csv` option takes no arguments, and will generate a time-sheet-style CSV, with each record on a line, and one column per tag (with marks in the appropriate rows and columns indicating which records were tagged in which way). This overrides any setting of `--output-format`, either persistent or on the command line.
 
-The `--filter` option can be specified multiple times, and records **must match all filters to be contained in the output (that is separate filters are combined with a logical AND)**. The `--filter` options takes JSON documents that describe the filters, with conditinos specified in the same JSON documenting being combined with a logical OR (that is, a record matching ANY condition in a single `--filter` expression will be returned, but final results must pass every expression provided with a `--filter` option)
+The `--filter` option can be specified multiple times, and records **must match all filters to be contained in the output (that is separate filters are combined with a logical AND)**. The `--filter` options takes JSON documents that describe the filters, with conditions specified in the same JSON documenting being combined with a logical OR (that is, a record matching ANY condition in a single `--filter` expression will be returned, but final results must pass every expression provided with a `--filter` option)
 
 ```json
 {
   "Tags": [ "string", ... ],
-  "StartTime": [ 
+  "StartTime": [
     {
       "Condition": "<"|"<="|"=="|">="|">"|"!=",
       "Timespec": "string"
     },
     ...
   ],
-  "EndTime": [ 
+  "EndTime": [
     {
       "Condition": "<"|"<="|"=="|">="|">"|"!=",
       "Timespec": "string"
@@ -218,19 +218,19 @@ As with `tt track`, the timespecs passed to these filters are parsed by `datepar
 
 Find all of the untagged records.
 
-```
+```text
 tt ls --filter '{"Tags": []}'
 ```
 
 Find all of the records tagged with both *Personal* and *Gardening*:
 
-```
+```text
 tt ls --filter '{"Tags": ["Personal"])' --filter '{"Tags": ["Gardening"]}'
 ```
 
 Finding all of the records tagged with *Work* since the start of the work week, not counting anything in progress.
 
-```
+```text
 tt ls --filter '{"StartTime":[{"Condition": ">=", "Timespec": "monday"}]}' \
       --filter '{"EndTime":[{"Condition": "<=", "Timespec": "now"}]}' \
       --filter '{"Tags": ["Work"]}'
@@ -245,7 +245,8 @@ Hooks are executable files placed in the subdirectories of `~/.litt/hooks`, wher
 - `pre_commit`: After all changes are made to the state, but before the state is written to disk.
   - Context: The old and new images of any changed items.
     - For Aliases (if the OldImage value is `null`, then the alias did not exist before this command; if the NewImage value is `null` then the alias was deleted by the command run):
-    ```
+
+    ```json
     {
       "OldImage": {
         "AliasKey": {
@@ -259,8 +260,10 @@ Hooks are executable files placed in the subdirectories of `~/.litt/hooks`, wher
       }
     }
     ```
+
     - For Records (if the OldImage value is `null`, then the alias did not exist before this command; if the NewImage value is `null` then the alias was deleted by the command run):
-    ```
+
+    ```json
     {
       "OldImage": {
         "RecordId": {
@@ -274,6 +277,7 @@ Hooks are executable files placed in the subdirectories of `~/.litt/hooks`, wher
       }
     }
     ```
+
 - `post_commit`: After all changes are made to the state, and after the state is written to disk.
   - Context: Same as `pre_commit`
 - `pre_config_write`: After all changes are made to the persistent configuration, but before the config is written to disk.
