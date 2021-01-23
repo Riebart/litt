@@ -15,12 +15,10 @@ Exit codes:
 - 8: Unable to parse a given timespec
 - 9: Attempt to edit a record with an ID that doesn't exist.
 - 10: A hook failed to execute properly
-- 11: A dryrun was specified.
+- 11: A sortkey was specified for `tt ls`, but the key doesn't exist for one or more items in the log
+- 127: A dryrun was specified.
 """
 
-from __future__ import print_function
-
-import re
 import os
 import sys
 import copy
@@ -36,10 +34,24 @@ try:
 except ImportError:
     pass
 
+VALID_RECORD_SORT_KEYS = [
+    "CommitTime", "StartTime", "EndTime", "Description", "ID", "Detail"
+]
+
+
+def __record_sort_keys(k):
+    if k in VALID_RECORD_SORT_KEYS:
+        return k
+    print("Sort key must be one of: %s" % str(VALID_RECORD_SORT_KEYS),
+          file=sys.stderr)
+    raise ValueError("Sort key must be one of: %s" %
+                     str(VALID_RECORD_SORT_KEYS))
+
 
 def __dotdir():
     if sys.platform == "win32":
-        return pathjoin(os.environ.get("HOMEDRIVE", ""), os.environ.get("HOMEPATH", ""), ".litt")
+        return pathjoin(os.environ.get("HOMEDRIVE", ""),
+                        os.environ.get("HOMEPATH", ""), ".litt")
     else:
         return pathjoin(os.environ.get("HOME", ""), ".litt")
 
@@ -144,8 +156,19 @@ def __human_alias(alias):
     return ret
 
 
-def __seconds_to_hhmm(seconds):
-    return "%dh %02d" % (seconds // 3600, (seconds % 3600) // 60)
+def __seconds_to_hhmmss(seconds):
+    if seconds < 60:
+        if seconds < 10:
+            duration_string = "%.2fs" % seconds
+        else:
+            duration_string = "%ds" % seconds
+    else:
+        hours = seconds // 3600
+        minutes = (seconds % 3600) // 60
+
+        duration_string = "%dh %02dm" % (hours, minutes)
+
+    return duration_string
 
 
 def __human_record(record):
@@ -156,12 +179,12 @@ def __human_record(record):
     if "EndTime" in record:
         if record["EndTime"] is None:
             ret += "Recording is still ongoing.\n"
-            ret += "Elapsed wall-clock time: %s\n" % __seconds_to_hhmm(
+            ret += "Elapsed wall-clock time: %s\n" % __seconds_to_hhmmss(
                 __parse_time("now") - record["StartTime"])
         else:
             ret += "Record ended at: %s\n" % __timestamp_to_iso(
                 record["EndTime"])
-            ret += "Elapsed wall-clock time: %s\n" % __seconds_to_hhmm(
+            ret += "Elapsed wall-clock time: %s\n" % __seconds_to_hhmmss(
                 record["EndTime"] - record["StartTime"])
     if "Description" in record:
         ret += "Description: %s\n" % record["Description"]
@@ -174,15 +197,25 @@ def __human_record(record):
     return ret + "\n"
 
 
-def __write_output(obj, pargs, config, human_hint):
+def __write_output(obj, pargs, config, human_hint, dict_as_entries=False):
     fmt = config[
         "OutputFormat"] if pargs.output_format is None else pargs.output_format
     if fmt == "json":
-        print(json.dumps(obj, sort_keys=True, indent=4))
+        print(
+            json.dumps(({i["key"]: i["value"]
+                         for i in obj} if dict_as_entries else obj),
+                       sort_keys=True,
+                       indent=4))
     elif fmt == "json-compact":
-        print(json.dumps(obj, sort_keys=True))
+        print(
+            json.dumps(({i["key"]: i["value"]
+                         for i in obj} if dict_as_entries else obj),
+                       sort_keys=True))
     elif fmt == "yaml":
-        print(yaml.dump(obj, default_flow_style=False).strip())
+        print(
+            yaml.dump(({i["key"]: i["value"]
+                        for i in obj} if dict_as_entries else obj),
+                      default_flow_style=False).strip())
     elif fmt == "human":
         # For human readable output, we need to know what the human hint is.
         if human_hint == "ID":
@@ -198,13 +231,21 @@ def __write_output(obj, pargs, config, human_hint):
                 print("Alias \"%s\"" % key)
                 print(__human_alias(alias))
         elif human_hint.startswith("Record"):
-            # This will always be a dictionary, but may sometimes be a bare record.
+            # This will always be a dictionary, or dictionary as entries,
+            # but may sometimes be a bare record.
             if "StartTime" in obj:
                 print(__human_record(obj))
             else:
-                for key, alias in obj.items():
-                    print("Record \"%s\"" % key)
-                    print(__human_record(alias))
+                if dict_as_entries:
+                    for entry in obj:
+                        key = entry["key"]
+                        value = entry["value"]
+                        print("Record \"%s\"" % key)
+                        print(__human_record(value))
+                else:
+                    for key, value in obj.items():
+                        print("Record \"%s\"" % key)
+                        print(__human_record(value))
         else:
             raise ValueError("Undefined human hint '%s'" % human_hint)
 
@@ -575,7 +616,7 @@ def cmd_track(pargs, state, config):
 
     if pargs.dryrun:
         __write_output(record, pargs, config, "Record.Complete")
-        sys.exit(11)
+        sys.exit(127)
     else:
         state["Records"][pargs.id] = record
 
@@ -631,6 +672,7 @@ def __check_timespec_filter(timestamp, timespeclist):
 
 
 def __check_regex_filter(stringval, regexlist):
+    import re
     if stringval is None:
         return False
     for pattern in regexlist:
@@ -661,7 +703,7 @@ def __timestamp_to_iso(timestamp):
     from datetime import datetime
     from tzlocal import get_localzone
     return datetime.fromtimestamp(timestamp).replace(
-        tzinfo=get_localzone()).strftime("%F %T %z")
+        tzinfo=get_localzone()).strftime("%FT%T%z")
 
 
 def __csv_format(records, allrecords, pargs):
@@ -680,7 +722,12 @@ def __csv_format(records, allrecords, pargs):
 
     tags = list()
     rows = copy.deepcopy(records)
-    for key, val in rows.items():
+
+    # The input is always a list of dictionary items as entries of the form
+    #   [{"key": ..., "value": ...}, ...]
+    for entry in rows:
+        key = entry["key"]
+        val = entry["value"]
         val["RecordId"] = key
         val["Duration"] = (val["EndTime"] - val["StartTime"]) / 3600
         val["InterruptionDuration"] = 0.0
@@ -710,15 +757,17 @@ def __csv_format(records, allrecords, pargs):
         ["StructuredData"] if pargs.with_structured_data else []) + tag_columns
     csv = DictWriter(sys.stdout, column_names)
     csv.writeheader()
-    csv.writerows([{cname: row.get(cname, "")
-                    for cname in column_names} for _, row in rows.items()])
+    csv.writerows(
+        [{cname: entry["value"].get(cname, "")
+          for cname in column_names} for entry in rows])
 
     sys.exit()
 
 
 def cmd_ls(pargs, state, config):
     """
-    Retrieve and filter the records based on the input options.
+    Retrieve and filter the records based on the input options, sorting the output by the provided
+    sorting key.
     """
     if pargs.pos_id is not None:
         pargs.id.append(pargs.pos_id)
@@ -742,10 +791,19 @@ def cmd_ls(pargs, state, config):
             if "Detail" in val:
                 del val["Detail"]
 
+    results_list = [{"key": k, "value": v} for k, v in results.items()]
+    try:
+        results_list.sort(key=lambda d: d["value"][pargs.sort_by]
+                          if pargs.sort_by != "ID" else d["key"])
+    except Exception as e:
+        print("Error sorting log output.", repr(e), file=sys.stderr)
+        sys.exit(12)
+
     if pargs.csv:
-        __csv_format(results, state["Records"], pargs)
+        __csv_format(results_list, state["Records"], pargs)
     else:
-        __write_output(results, pargs, config, "Record.Complete.List")
+        __write_output(results_list, pargs, config, "Record.Complete.List",
+                       True)
 
     return None
 
@@ -1006,6 +1064,15 @@ def __main():  # pylint: disable=R0915
         nargs="?",
         dest="pos_id",
         help="""Positional argument for quickly specifying a single ID.""")
+    cmd.add_argument("-s",
+                     "--sort-by",
+                     required=False,
+                     metavar="<sortkey>",
+                     type=__record_sort_keys,
+                     default="CommitTime",
+                     help="""
+        The record key to use to sort records by. The default is to sort by CommitTime. If an invalid sort key is used, no results are shown and an error is printed showing valid choices."
+        """)
     cmd.add_argument(
         "-i",
         "--id",

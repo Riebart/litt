@@ -8,19 +8,19 @@ Using `tt` can be extremely terse, and could even be bound to a keyboard macro b
 
 The following command will start a stopwatch, if one isn't currently running, or stop the currently running stopwatch.
 
-```text
+```shell
 tt sw
 ```
 
 Note that since you have not supplied any information about _what_ you were doing during that time, it cannot fill it in however you can amend these recorded time periods after the fact with more detail. If you want to supply information about what you are doing, you can either supply a description explicitly, as in:
 
-```text
+```shell
 tt sw "Writing documentation"
 ```
 
 Or make use of aliases which allow you to match a set of tags, a description, and other information to a string. You can create an alias with the following:
 
-```text
+```shell
 tt alias --key dev.docs --tag Development --tag Documentation --description "Writing documentation for dev work"
 ```
 
@@ -28,7 +28,7 @@ Note that the previous `tt sw` command example is actually doing more than just 
 
 You can use aliases with the exact same command syntax as above:
 
-```text
+```shell
 tt sw dev.docs
 ```
 
@@ -63,7 +63,7 @@ The usage of `tt` is pretty straight forward:
 
 There are two additional commands that allow you to edit time records (`tt amend`) and create aliases for commonly used tasks (`tt alias`) that round out the functionality.
 
-Viewing tracked data is done with `tt ls` which allows for filtering, viewing, and optionally saving the data for use with another application.
+Viewing tracked data is done with `tt ls` which allows for filtering, viewing, sorting (sometimes, based on the chosen output format) and optionally saving the data for use with another application.
 
 **Note: To support terse interaction, all options have short and long forms, and in many cases positional arguments are supported where the meaning is either unambiguous or can be derived.**
 
@@ -141,7 +141,7 @@ Since `tt interrupt` and `tt resume` are only used with stopwatch time tracking,
 
 Aliases are ways of pairing commonly used options (description, detail, tags, etc...) with a shorter, easily remembered key. Recall the example from above:
 
-```text
+```shell
 tt alias --key dev.docs --tag Development --tag Documentation --description "Writing documentation for dev work"
 ```
 
@@ -149,7 +149,7 @@ This alias can now be referenced in any of `tt start`, `tt interrupt`, or `tt sw
 
 When a valid alias key is given to a command, the properties defined by the alias are set first, and if any other options are provided, those values override the value set by the alias. For example, using the above alias:
 
-```text
+```shell
 tt start dev.docs -d "Proof-reading documentation"
 ```
 
@@ -172,11 +172,14 @@ Note that LITT takes some pointers from Mercurial and does not include significa
 Reading records from the ledger can be done with `tt ls`, which supports the following options:
 
 - `-i`/`--id`
+- `-s`/`--sort-by`
 - `-f`/`--filter`
 - `-c`/`--csv`
 - `-w`/`--with-structured-data`
 - `-D`/`--without-detail`
 - `--dryrun`
+
+Sorting with `--sort-by` allows the records to be sorted by some key that is present in a standard record _only when the output format is not one of `json`/`json-compact`/`yaml`_. This is because those formats output a dictionary that keys on record ID, and there is no guarantee that serializing that structure will remain ordered on import and export. When printing the data as a CSV or in human-readable form, the sorting works as expected. By default, records are sorted by `CommitTime`.
 
 By default, the structured data is not included in the output, however this can be changed with `--with-structured-data` (which leaves it in the base64 encoded form). Similarly, the `--without-detail` option will omit the detailed text field (`Detail`) from the output, useful for summary tables or reports where the CSV output is being consumed directly (and not being send to another application for processing.)
 
@@ -216,21 +219,27 @@ As with `tt track`, the timespecs passed to these filters are parsed by `datepar
 
 ### Examples
 
+Find all records, displayed human-readably, and sorted by the time they ended.
+
+```shell
+tt --output-format human ls --sort-by EndTime
+```
+
 Find all of the untagged records.
 
-```text
+```shell
 tt ls --filter '{"Tags": []}'
 ```
 
 Find all of the records tagged with both *Personal* and *Gardening*:
 
-```text
+```shell
 tt ls --filter '{"Tags": ["Personal"])' --filter '{"Tags": ["Gardening"]}'
 ```
 
 Finding all of the records tagged with *Work* since the start of the work week, not counting anything in progress.
 
-```text
+```shell
 tt ls --filter '{"StartTime":[{"Condition": ">=", "Timespec": "monday"}]}' \
       --filter '{"EndTime":[{"Condition": "<=", "Timespec": "now"}]}' \
       --filter '{"Tags": ["Work"]}'
