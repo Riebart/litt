@@ -197,55 +197,60 @@ def __human_record(record):
     return ret + "\n"
 
 
-def __write_output(obj, pargs, config, human_hint, dict_as_entries=False):
+def __write_output(obj,
+                   pargs,
+                   config,
+                   human_hint,
+                   dict_as_entries=False,
+                   outfile=sys.stdout):
     fmt = config[
         "OutputFormat"] if pargs.output_format is None else pargs.output_format
     if fmt == "json":
-        print(
-            json.dumps(({i["key"]: i["value"]
-                         for i in obj} if dict_as_entries else obj),
-                       sort_keys=True,
-                       indent=4))
+        print(json.dumps(({i["key"]: i["value"]
+                           for i in obj} if dict_as_entries else obj),
+                         sort_keys=True,
+                         indent=4),
+              file=outfile)
     elif fmt == "json-compact":
-        print(
-            json.dumps(({i["key"]: i["value"]
-                         for i in obj} if dict_as_entries else obj),
-                       sort_keys=True))
+        print(json.dumps(({i["key"]: i["value"]
+                           for i in obj} if dict_as_entries else obj),
+                         sort_keys=True),
+              file=outfile)
     elif fmt == "yaml":
-        print(
-            yaml.dump(({i["key"]: i["value"]
-                        for i in obj} if dict_as_entries else obj),
-                      default_flow_style=False).strip())
+        print(yaml.dump(({i["key"]: i["value"]
+                          for i in obj} if dict_as_entries else obj),
+                        default_flow_style=False).strip(),
+              file=outfile)
     elif fmt == "human":
         # For human readable output, we need to know what the human hint is.
         if human_hint == "ID":
             # It's just an ID string, so just print it out saying so.
-            print("Committed Record ID: %s" % obj)
+            print("Committed Record ID: %s" % obj, file=outfile)
         elif human_hint == "Config":
             # It is the configuration object, so print it in pseudo-yaml
             for k, v in obj.items():
-                print("%s: %s" % (str(k), str(v)))
+                print("%s: %s" % (str(k), str(v)), file=outfile)
         elif human_hint.startswith("Alias"):
             # This will always be a dictionary mapping alias keys to parameter sets.
             for key, alias in obj.items():
-                print("Alias \"%s\"" % key)
-                print(__human_alias(alias))
+                print("Alias \"%s\"" % key, file=outfile)
+                print(__human_alias(alias), file=outfile)
         elif human_hint.startswith("Record"):
             # This will always be a dictionary, or dictionary as entries,
             # but may sometimes be a bare record.
             if "StartTime" in obj:
-                print(__human_record(obj))
+                print(__human_record(obj), file=outfile)
             else:
                 if dict_as_entries:
                     for entry in obj:
                         key = entry["key"]
                         value = entry["value"]
-                        print("Record \"%s\"" % key)
-                        print(__human_record(value))
+                        print("Record \"%s\"" % key, file=outfile)
+                        print(__human_record(value), file=outfile)
                 else:
                     for key, value in obj.items():
-                        print("Record \"%s\"" % key)
-                        print(__human_record(value))
+                        print("Record \"%s\"" % key, file=outfile)
+                        print(__human_record(value), file=outfile)
         else:
             raise ValueError("Undefined human hint '%s'" % human_hint)
 
@@ -254,10 +259,10 @@ def __load_state():
     """
     Load time tracking events from the DB in the dotdirectory.
     """
-    with open("%s/events.json" % __dotdir(), "r") as ifp:
-        state = json.loads(ifp.read())
-    with open("%s/config.json" % __dotdir(), "r") as ifp:
-        config = json.loads(ifp.read())
+    with open(pathjoin(__dotdir(), "events.json"), "r") as fp:
+        state = json.loads(fp.read())
+    with open(pathjoin(__dotdir(), "config.json"), "r") as fp:
+        config = json.loads(fp.read())
 
     return state, config
 
@@ -280,15 +285,22 @@ def __write_config(config, hooks):
     run_hooks("post_config_write", hooks, config)
 
 
-def cmd_base(pargs, state, config):
+def cmd_base(pargs, state, config, outfile=sys.stdout):
     """
     Print out the status of any currently running stopwatch or interruption timer.
     """
     if state["Stopwatch"] is not None:
-        __write_output(state["Stopwatch"], pargs, config, "Record.Incomplete")
+        __write_output(state["Stopwatch"],
+                       pargs,
+                       config,
+                       "Record.Incomplete",
+                       outfile=outfile)
         if state["Interruption"] is not None:
-            __write_output(state["Interruption"], pargs, config,
-                           "Record.Incomplete")
+            __write_output(state["Interruption"],
+                           pargs,
+                           config,
+                           "Record.Incomplete",
+                           outfile=outfile)
 
     return None
 
@@ -422,14 +434,15 @@ def __create_record(pargs, state):
     return record
 
 
-def cmd_start(pargs, state, _):
+def cmd_start(pargs, state, _, outfile=sys.stdout):
     """
     Start a stopwatch to track time against a task
     """
     if state["Stopwatch"] is not None:
         print("Stopwatch currently running, ignoring current request",
               file=sys.stderr)
-        sys.exit(1)
+        if outfile == sys.stdout:
+            sys.exit(1)
 
     record = __create_record(pargs, state)
     if pargs.start_time is not None:
@@ -706,7 +719,7 @@ def __timestamp_to_iso(timestamp):
         tzinfo=get_localzone()).strftime("%FT%T%z")
 
 
-def __csv_format(records, allrecords, pargs):
+def __csv_format(records, allrecords, pargs, outfile=sys.stdout):
     from collections import Counter
     from csv import DictWriter
     # Print out a CSV with the following header structure
@@ -755,16 +768,15 @@ def __csv_format(records, allrecords, pargs):
         "InterruptionDuration", "Description"
     ] + ([] if pargs.without_detail else ["Detail"]) + (
         ["StructuredData"] if pargs.with_structured_data else []) + tag_columns
-    csv = DictWriter(sys.stdout, column_names)
+    csv = DictWriter(outfile, column_names)
     csv.writeheader()
-    csv.writerows(
-        [{cname: entry["value"].get(cname, "")
-          for cname in column_names} for entry in rows])
+    csv.writerows([{
+        col_name: entry["value"].get(col_name, "")
+        for col_name in column_names
+    } for entry in rows])
 
-    sys.exit()
 
-
-def cmd_ls(pargs, state, config):
+def cmd_ls(pargs, state, config, outfile=sys.stdout):
     """
     Retrieve and filter the records based on the input options, sorting the output by the provided
     sorting key.
@@ -800,12 +812,22 @@ def cmd_ls(pargs, state, config):
         sys.exit(12)
 
     if pargs.csv:
-        __csv_format(results_list, state["Records"], pargs)
+        __csv_format(results_list, state["Records"], pargs, outfile)
     else:
-        __write_output(results_list, pargs, config, "Record.Complete.List",
-                       True)
+        __write_output(results_list,
+                       pargs,
+                       config,
+                       "Record.Complete.List",
+                       dict_as_entries=True,
+                       outfile=outfile)
 
     return None
+
+
+def cmd_serve(pargs, state, config):
+    import tt_serve
+    server = tt_serve.create_server(pargs.preshared_key)
+    server.run(port=pargs.port)
 
 
 def __positional_argument(parser):
@@ -1123,8 +1145,29 @@ def __main():  # pylint: disable=R0915
                      required=False,
                      default=False,
                      action="store_true",
-                     help="""Exclude the detailed text field in the ouptut.""")
+                     help="""Exclude the detailed text field in the output.""")
     __dryrun_option(cmd)
+
+    ################ tt serve
+    cmd = subparsers.add_parser(
+        "serve",
+        help=
+        """Serve up an HTTP API that can be used by a webapp or mobile app""")
+    cmd.add_argument("-p",
+                     "--port",
+                     required=False,
+                     default=9872,
+                     type=int,
+                     help="""Port to serve the API on""")
+    cmd.add_argument(
+        "-k",
+        "--preshared-key",
+        required=False,
+        default=None,
+        type=str,
+        help=
+        """Pre-shared key string to use to ensure that clients are authenticated. If not specified, then the API is unauthenticated. If provided, then this must be provided as an Authentication HTTP header, as `Bearer ${PreSharedKey}`"""
+    )
 
     pargs = parser.parse_args()
 
@@ -1138,21 +1181,21 @@ def __main():  # pylint: disable=R0915
     images = None
 
     if pargs.command is None:
-        images = cmd_base(pargs, state, config)
+        cmd_base(pargs, state, config)
     elif pargs.command == "config":
-        images = cmd_config(pargs, state, config, hooks)
+        cmd_config(pargs, state, config, hooks)
     elif pargs.command == "alias":
         images = cmd_alias(pargs, state, config)
     elif pargs.command == "start":
-        images = cmd_start(pargs, state, config)
+        cmd_start(pargs, state, config)
     elif pargs.command == "stop":
         images = cmd_stop(pargs, state, config)
     elif pargs.command == "sw":
         images = cmd_sw(pargs, state, config)
     elif pargs.command == "cancel":
-        images = cmd_cancel(pargs, state, config)
+        cmd_cancel(pargs, state, config)
     elif pargs.command in ["i", "interrupt"]:
-        images = cmd_interrupt(pargs, state, config)
+        cmd_interrupt(pargs, state, config)
     elif pargs.command in ["r", "resume"]:
         images = cmd_resume(pargs, state, config)
     elif pargs.command == "track":
@@ -1160,7 +1203,13 @@ def __main():  # pylint: disable=R0915
     elif pargs.command == "amend":
         images = cmd_amend(pargs, state, config)
     elif pargs.command == "ls":
-        images = cmd_ls(pargs, state, config)
+        cmd_ls(pargs, state, config)
+    elif pargs.command == "serve":
+        cmd_serve(pargs, state, config)
+        # Because the state was modified out of band of this process,
+        # we need to reload it ot to ensure that this in-line __write_state()
+        # doesn't clobber it with our initially loaded state
+        state, config = __load_state()
 
     run_hooks("pre_commit", hooks, images)
     __write_state(state, hooks)
