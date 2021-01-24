@@ -171,7 +171,7 @@ def __seconds_to_hhmmss(seconds):
     return duration_string
 
 
-def __human_record(record):
+def __human_record(record, context):
     ret = ""
     if "StartTime" in record:
         ret += "Record started at: %s\n" % __timestamp_to_iso(
@@ -186,6 +186,20 @@ def __human_record(record):
                 record["EndTime"])
             ret += "Elapsed wall-clock time: %s\n" % __seconds_to_hhmmss(
                 record["EndTime"] - record["StartTime"])
+            if "Interruptions" in record and record["Interruptions"] != []:
+                print(record)
+                ret += "Number of interruptions: %s\n" % len(
+                    record["Interruptions"])
+                interruption_duration = sum([
+                    context[i["Id"]]["EndTime"] - context[i["Id"]]["StartTime"]
+                    for i in record["Interruptions"]
+                ])
+                ret += "Total interruption duration: %s\n" % __seconds_to_hhmmss(
+                    interruption_duration)
+                ret += "Activity duration: %s\n" % __seconds_to_hhmmss(
+                    record["EndTime"] - record["StartTime"] -
+                    interruption_duration)
+
     if "Description" in record:
         ret += "Description: %s\n" % record["Description"]
     if "Tags" in record:
@@ -242,15 +256,19 @@ def __write_output(obj,
                 print(__human_record(obj), file=outfile)
             else:
                 if dict_as_entries:
+                    entry_dict = {
+                        entry["key"]: entry["value"]
+                        for entry in obj
+                    }
                     for entry in obj:
                         key = entry["key"]
                         value = entry["value"]
                         print("Record \"%s\"" % key, file=outfile)
-                        print(__human_record(value), file=outfile)
+                        print(__human_record(value, entry_dict), file=outfile)
                 else:
                     for key, value in obj.items():
                         print("Record \"%s\"" % key, file=outfile)
-                        print(__human_record(value), file=outfile)
+                        print(__human_record(value, obj), file=outfile)
         else:
             raise ValueError("Undefined human hint '%s'" % human_hint)
 
