@@ -15,13 +15,10 @@ TIMESPEC_ARGS = ["start_time", "end_time"]
 COMMIT_TIME_ARGS = ["id", "untag"]
 DRYRUN_ARG = ["dryrun"]
 
-BaseArgs = namedtuple("BaseArgs", COMMON_ARGS)
 
-LsArgs = namedtuple(
-    "LsArgs", COMMON_ARGS + [
-        "pos_id", "sort_by", "id", "filter", "csv", "with_structured_data",
-        "without_detail"
-    ])
+class Args(object):
+    pass
+
 
 StartArgs = namedtuple(
     "StartArgs", COMMON_ARGS + POSITIONAL_ARG + ALIAS_ARGS +
@@ -65,9 +62,9 @@ def __finalize(images, hooks, state, config):
 def base():
     hooks, state, config = __prepare_context()
 
-    pargs = BaseArgs(
-        config.get("OutputFormat", None) if request.args.
-        get("output_format") is None else request.args.get("output_format"))
+    pargs = Args()
+    pargs.output_format = config.get("OutputFormat", None) if request.args.get(
+        "output_format") is None else request.args.get("output_format")
 
     output = StringIO()
     tt.cmd_base(pargs, state, config, output)
@@ -78,25 +75,26 @@ def base():
 def ls(positional_arg):
     hooks, state, config = __prepare_context()
 
-    pargs = LsArgs(
-        config.get("OutputFormat", None)
-        if request.args.get("output_format") is None else
-        request.args.get("output_format"), positional_arg,
-        request.args.get("sort_by", default="CommitTime", type=str),
-        request.args.get("filter",
-                         default=[],
-                         type=lambda v: __json_type(v, list)),
-        request.args.get("id", default=[],
-                         type=lambda v: __json_type(v, list)),
-        request.args.get("csv",
-                         default=False,
-                         type=lambda v: __json_type(v, bool)),
-        request.args.get("with_structured_data",
-                         default=False,
-                         type=lambda v: __json_type(v, bool)),
-        request.args.get("without_detail",
-                         default=False,
-                         type=lambda v: __json_type(v, bool)))
+    pargs = Args()
+    pargs.output_format = config.get("OutputFormat", None) if request.args.get(
+        "output_format") is None else request.args.get("output_format")
+    pargs.pos_id = positional_arg
+    pargs.sort_by = request.args.get("sort_by", default="CommitTime", type=str)
+    pargs.filter = request.args.get("filter",
+                                    default=[],
+                                    type=lambda v: __json_type(v, list))
+    pargs.id = request.args.get("id",
+                                default=[],
+                                type=lambda v: __json_type(v, list))
+    pargs.csv = request.args.get("csv",
+                                 default=False,
+                                 type=lambda v: __json_type(v, bool))
+    pargs.with_structured_data = request.args.get(
+        "with_structured_data",
+        default=False,
+        type=lambda v: __json_type(v, bool)),
+    pargs.without_detail = request.args.get(
+        "without_detail", default=False, type=lambda v: __json_type(v, bool))
 
     output = StringIO()
     tt.cmd_ls(pargs, state, config, output)
@@ -104,23 +102,55 @@ def ls(positional_arg):
     return output.getvalue()
 
 
+def sw(positional_arg):
+    hooks, state, config = __prepare_context()
+
+    pargs = Args()
+    pargs.output_format = config.get("OutputFormat", None) if request.args.get(
+        "output_format") is None else request.args.get("output_format")
+    pargs.quicktext = positional_arg if positional_arg is not None else request.args.get(
+        "quicktext", default=None)
+    pargs.alias = request.args.get("alias", default=None, type=str)
+    pargs.description = request.args.get("description", default=None, type=str)
+    pargs.detail = request.args.get("detail", default=None, type=str)
+    pargs.tag = request.args.get("tag",
+                                 default=[],
+                                 type=lambda v: __json_type(v, list))
+    pargs.structured_data = request.args.get("structured_data",
+                                             default=None,
+                                             type=str)
+    pargs.start_time = request.args.get("start_time", default=None, type=str)
+    pargs.end_time = request.args.get("end_time", default=None, type=str)
+    pargs.id = request.args.get("id", default=None, type=str)
+    pargs.untag = request.args.get("untag",
+                                   default=[],
+                                   type=lambda v: __json_type(v, list))
+
+    output = StringIO()
+    tt.cmd_sw(pargs, state, config, output)
+    __finalize(None, hooks, state, config)
+
+    return output.getvalue()
+
+
 def start(positional_arg):
     hooks, state, config = __prepare_context()
 
-    pargs = StartArgs(
-        config.get("OutputFormat", None)
-        if request.args.get("output_format") is None else
-        request.args.get("output_format"), positional_arg if positional_arg
-        is not None else request.args.get("quicktext", default=None),
-        request.args.get("alias", default=None, type=str),
-        request.args.get("description", default=None, type=str),
-        request.args.get("detail", default=None, type=str),
-        request.args.get("tag",
-                         default=[],
-                         type=lambda v: __json_type(v, list)),
-        request.args.get("structured_data", default=None, type=str),
-        request.args.get("start_time", default=None, type=str),
-        request.args.get("end_time", default=None, type=str))
+    pargs = Args()
+    pargs.output_format = config.get("OutputFormat", None) if request.args.get(
+        "output_format") is None else request.args.get("output_format")
+    pargs.quicktext = positional_arg if positional_arg is not None else request.args.get(
+        "quicktext", default=None)
+    pargs.alias = request.args.get("alias", default=None, type=str)
+    pargs.description = request.args.get("description", default=None, type=str)
+    pargs.detail = request.args.get("detail", default=None, type=str)
+    pargs.tag = request.args.get("tag",
+                                 default=[],
+                                 type=lambda v: __json_type(v, list))
+    pargs.structured_data = request.args.get("structured_data",
+                                             default=None,
+                                             type=str)
+    pargs.start_time = request.args.get("start_time", default=None, type=str)
 
     output = StringIO()
     tt.cmd_start(pargs, state, config, output)
@@ -130,15 +160,87 @@ def start(positional_arg):
 
 
 def stop(positional_arg):
-    return f"stop {positional_arg}"
+    hooks, state, config = __prepare_context()
+
+    pargs = Args()
+    pargs.output_format = config.get("OutputFormat", None) if request.args.get(
+        "output_format") is None else request.args.get("output_format")
+    pargs.quicktext = positional_arg if positional_arg is not None else request.args.get(
+        "quicktext", default=None)
+    pargs.alias = request.args.get("alias", default=None, type=str)
+    pargs.description = request.args.get("description", default=None, type=str)
+    pargs.detail = request.args.get("detail", default=None, type=str)
+    pargs.tag = request.args.get("tag",
+                                 default=[],
+                                 type=lambda v: __json_type(v, list))
+    pargs.structured_data = request.args.get("structured_data",
+                                             default=None,
+                                             type=str)
+    pargs.end_time = request.args.get("end_time", default=None, type=str)
+    pargs.id = request.args.get("id", default=None, type=str)
+    pargs.untag = request.args.get("untag",
+                                   default=[],
+                                   type=lambda v: __json_type(v, list))
+
+    output = StringIO()
+    tt.cmd_stop(pargs, state, config, output)
+    __finalize(None, hooks, state, config)
+
+    return output.getvalue()
 
 
 def interrupt(positional_arg):
-    return f"interrupt {positional_arg}"
+    hooks, state, config = __prepare_context()
+
+    pargs = Args()
+    pargs.output_format = config.get("OutputFormat", None) if request.args.get(
+        "output_format") is None else request.args.get("output_format")
+    pargs.quicktext = positional_arg if positional_arg is not None else request.args.get(
+        "quicktext", default=None)
+    pargs.alias = request.args.get("alias", default=None, type=str)
+    pargs.description = request.args.get("description", default=None, type=str)
+    pargs.detail = request.args.get("detail", default=None, type=str)
+    pargs.tag = request.args.get("tag",
+                                 default=[],
+                                 type=lambda v: __json_type(v, list))
+    pargs.structured_data = request.args.get("structured_data",
+                                             default=None,
+                                             type=str)
+
+    output = StringIO()
+    tt.cmd_interrupt(pargs, state, config, output)
+    __finalize(None, hooks, state, config)
+
+    return output.getvalue()
 
 
 def resume(positional_arg):
-    return f"resume {positional_arg}"
+    hooks, state, config = __prepare_context()
+
+    pargs = Args()
+    pargs.output_format = config.get("OutputFormat", None) if request.args.get(
+        "output_format") is None else request.args.get("output_format")
+    pargs.quicktext = positional_arg if positional_arg is not None else request.args.get(
+        "quicktext", default=None)
+    pargs.alias = request.args.get("alias", default=None, type=str)
+    pargs.description = request.args.get("description", default=None, type=str)
+    pargs.detail = request.args.get("detail", default=None, type=str)
+    pargs.tag = request.args.get("tag",
+                                 default=[],
+                                 type=lambda v: __json_type(v, list))
+    pargs.structured_data = request.args.get("structured_data",
+                                             default=None,
+                                             type=str)
+    pargs.id = request.args.get("id", default=None, type=str)
+    pargs.untag = request.args.get("untag",
+                                   default=[],
+                                   type=lambda v: __json_type(v, list))
+
+    output = StringIO()
+    tt.cmd_resume(pargs, state, config, output)
+    __finalize(None, hooks, state, config)
+
+    return output.getvalue()
 
 
 def cancel(positional_arg):
@@ -160,6 +262,9 @@ def create_server(preshared_key):
 
     app.add_url_rule("/ls", "ls_bare", lambda: ls(None), methods=["GET"])
     app.add_url_rule("/ls/<positional_arg>", "ls", ls, methods=["GET"])
+
+    app.add_url_rule("/sw", "sw_bare", lambda: sw(None), methods=["POST"])
+    app.add_url_rule("/sw/<positional_arg>", "sw", sw, methods=["POST"])
 
     app.add_url_rule("/start",
                      "start_bare",

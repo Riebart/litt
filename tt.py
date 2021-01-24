@@ -443,6 +443,8 @@ def cmd_start(pargs, state, _, outfile=sys.stdout):
               file=sys.stderr)
         if outfile == sys.stdout:
             sys.exit(1)
+        else:
+            return None
 
     record = __create_record(pargs, state)
     if pargs.start_time is not None:
@@ -483,14 +485,17 @@ def __update_record(old_record_prototype, pargs, state):
     return old_record
 
 
-def cmd_stop(pargs, state, config):
+def cmd_stop(pargs, state, config, outfile=sys.stdout):
     """
     Start a stopwatch to track time against a task
     """
     if state["Stopwatch"] is None:
         print("Stopwatch not currently running, ignoring current request",
               file=sys.stderr)
-        sys.exit(2)
+        if outfile == sys.stdout:
+            sys.exit(2)
+        else:
+            return None
 
     if pargs.id is None:
         pargs.id = __generate_id(state)
@@ -502,13 +507,13 @@ def cmd_stop(pargs, state, config):
     state["Stopwatch"] = None
     state["Records"][pargs.id] = record
 
-    __write_output(pargs.id, pargs, config, "ID")
+    __write_output(pargs.id, pargs, config, "ID", outfile=outfile)
 
     # Return the images, with None for the old image.
     return dict(OldImage=None, NewImage={pargs.id: record})
 
 
-def cmd_sw(pargs, state, config):
+def cmd_sw(pargs, state, config, outfile=sys.stdout):
     """
     Implements the smart stopwatch command which delegates to the start and stop functions based
     on the current state of the stopwatch.
@@ -516,9 +521,9 @@ def cmd_sw(pargs, state, config):
     # Since this is essentially just start or stop, but context sensitive, determine if there is
     # a stopwatch running, and call the right function.
     if state["Stopwatch"] is None:
-        return cmd_start(pargs, state, config)
+        return cmd_start(pargs, state, config, outfile)
     else:
-        return cmd_stop(pargs, state, config)
+        return cmd_stop(pargs, state, config, outfile)
 
 
 def cmd_cancel(pargs, state, config):
@@ -531,19 +536,22 @@ def cmd_cancel(pargs, state, config):
         state["Stopwatch"] = None
 
 
-def cmd_interrupt(pargs, state, config):
+def cmd_interrupt(pargs, state, config, outfile=sys.stdout):
     """
     Interrupt an existing stopwatch with a one-at-a-time interrupt timer.
     """
     if state["Stopwatch"] is None:
-        cmd_start(pargs, state, config)
+        cmd_start(pargs, state, config, outfile)
     else:
         # Confirm that there are no ongoing interruptions
         if state["Interruption"] is not None:
             print(
                 "Unable to interrupt task, as existing interruption is in progress.",
                 file=sys.stderr)
-            sys.exit(3)
+            if outfile == sys.stdout:
+                sys.exit(3)
+            else:
+                return None
         # Since at this point, there's no ongoing interruptions, add a new one to the end of the
         # Interruptions list
         record = __create_record(pargs, state)
@@ -552,20 +560,26 @@ def cmd_interrupt(pargs, state, config):
         state["Interruption"] = record
 
 
-def cmd_resume(pargs, state, config):
+def cmd_resume(pargs, state, config, outfile=sys.stdout):
     """
     Resume an interrupted stopwatch by cleaning up and writing the event to the ledger.
     """
     if state["Stopwatch"] is None:
         print("Unable to resume from interruption with no stopwatch running.",
               file=sys.stderr)
-        sys.exit(4)
+        if outfile == sys.stdout:
+            sys.exit(4)
+        else:
+            return None
     else:
         # Confirm that the interruption that's most recent exists and is indeed still open
         if state["Interruption"] is None:
             print("Unable to resume without an open interruption.",
                   file=sys.stderr)
-            sys.exit(5)
+            if outfile == sys.stdout:
+                sys.exit(5)
+            else:
+                return None
         # Since there's an open interruption, close it out.
         if pargs.id is None:
             pargs.id = __generate_id(state)
@@ -573,7 +587,7 @@ def cmd_resume(pargs, state, config):
         state["Records"][pargs.id] = record
         state["Interruption"] = None
         state["Stopwatch"]["Interruptions"].append(dict(Id=pargs.id))
-        __write_output(pargs.id, pargs, config, "ID")
+        __write_output(pargs.id, pargs, config, "ID", outfile=outfile)
         # Return the images, with None for the old image.
         return dict(OldImage=None, NewImage={pargs.id: record})
 
