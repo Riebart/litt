@@ -95,6 +95,9 @@ def ls(positional_arg):
         type=lambda v: __json_type(v, bool)),
     pargs.without_detail = request.args.get(
         "without_detail", default=False, type=lambda v: __json_type(v, bool))
+    pargs.dryrun = request.args.get("dryrun",
+                                    default=False,
+                                    type=lambda v: __json_type(v, bool))
 
     output = StringIO()
     tt.cmd_ls(pargs, state, config, output)
@@ -244,15 +247,82 @@ def resume(positional_arg):
 
 
 def cancel(positional_arg):
-    return f"cancel {positional_arg}"
+    hooks, state, config = __prepare_context()
+
+    pargs = Args()
+    pargs.output_format = config.get("OutputFormat", None) if request.args.get(
+        "output_format") is None else request.args.get("output_format")
+
+    output = StringIO()
+    tt.cmd_cancel(pargs, state, config, output)
+    __finalize(None, hooks, state, config)
+    return output.getvalue()
 
 
 def amend(positional_arg):
-    return f"amend {positional_arg}"
+    hooks, state, config = __prepare_context()
+
+    pargs = Args()
+    pargs.output_format = config.get("OutputFormat", None) if request.args.get(
+        "output_format") is None else request.args.get("output_format")
+    pargs.quicktext = positional_arg if positional_arg is not None else request.args.get(
+        "quicktext", default=None)
+    pargs.alias = request.args.get("alias", default=None, type=str)
+    pargs.description = request.args.get("description", default=None, type=str)
+    pargs.detail = request.args.get("detail", default=None, type=str)
+    pargs.tag = request.args.get("tag",
+                                 default=[],
+                                 type=lambda v: __json_type(v, list))
+    pargs.structured_data = request.args.get("structured_data",
+                                             default=None,
+                                             type=str)
+    pargs.start_time = request.args.get("start_time", default=None, type=str)
+    pargs.end_time = request.args.get("end_time", default=None, type=str)
+    pargs.id = request.args.get("id", default=None, type=str)
+    pargs.untag = request.args.get("untag",
+                                   default=[],
+                                   type=lambda v: __json_type(v, list))
+    pargs.dryrun = request.args.get("dryrun",
+                                    default=False,
+                                    type=lambda v: __json_type(v, bool))
+
+    output = StringIO()
+    tt.cmd_amend(pargs, state, config, output)
+    __finalize(None, hooks, state, config)
+    return output.getvalue()
 
 
 def track(positional_arg):
-    return f"track {positional_arg}"
+    hooks, state, config = __prepare_context()
+
+    pargs = Args()
+    pargs.output_format = config.get("OutputFormat", None) if request.args.get(
+        "output_format") is None else request.args.get("output_format")
+    pargs.quicktext = positional_arg if positional_arg is not None else request.args.get(
+        "quicktext", default=None)
+    pargs.alias = request.args.get("alias", default=None, type=str)
+    pargs.description = request.args.get("description", default=None, type=str)
+    pargs.detail = request.args.get("detail", default=None, type=str)
+    pargs.tag = request.args.get("tag",
+                                 default=[],
+                                 type=lambda v: __json_type(v, list))
+    pargs.structured_data = request.args.get("structured_data",
+                                             default=None,
+                                             type=str)
+    pargs.start_time = request.args.get("start_time", default=None, type=str)
+    pargs.end_time = request.args.get("end_time", default=None, type=str)
+    pargs.id = request.args.get("id", default=None, type=str)
+    pargs.untag = request.args.get("untag",
+                                   default=[],
+                                   type=lambda v: __json_type(v, list))
+    pargs.dryrun = request.args.get("dryrun",
+                                    default=False,
+                                    type=lambda v: __json_type(v, bool))
+
+    output = StringIO()
+    tt.cmd_track(pargs, state, config, output)
+    __finalize(None, hooks, state, config)
+    return output.getvalue()
 
 
 def create_server(preshared_key):

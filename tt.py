@@ -171,7 +171,7 @@ def __seconds_to_hhmmss(seconds):
     return duration_string
 
 
-def __human_record(record, context):
+def __human_record(record, context=None):
     ret = ""
     if "StartTime" in record:
         ret += "Record started at: %s\n" % __timestamp_to_iso(
@@ -544,7 +544,7 @@ def cmd_sw(pargs, state, config, outfile=sys.stdout):
         return cmd_stop(pargs, state, config, outfile)
 
 
-def cmd_cancel(pargs, state, config):
+def cmd_cancel(pargs, state, config, outfile=sys.stdout):
     """
     Cancels and cleans up any interruption or stopwatch that are currently active.
     """
@@ -623,7 +623,7 @@ def __parse_time(timespec):
     return dto.timestamp()
 
 
-def cmd_track(pargs, state, config):
+def cmd_track(pargs, state, config, outfile=sys.stdout):
     """
     Track a fixed interval of time
     """
@@ -636,7 +636,10 @@ def cmd_track(pargs, state, config):
         print(
             "At least one of start and end of a finite interval must be specified.",
             file=sys.stderr)
-        sys.exit(6)
+        if outfile == sys.stdout:
+            sys.exit(6)
+        else:
+            return None
 
     # Since the above check guarantees at least one was specified, set the other to
     # a timezone aware "now" (in UTC).
@@ -652,7 +655,10 @@ def cmd_track(pargs, state, config):
         print(
             "For finite-interval tracking, the end time must be strictly after the start time.",
             file=sys.stderr)
-        sys.exit(7)
+        if outfile == sys.stdout:
+            sys.exit(7)
+        else:
+            return None
 
     record = __create_record(pargs, state)
     record["StartTime"] = start_time
@@ -661,23 +667,29 @@ def cmd_track(pargs, state, config):
 
     if pargs.dryrun:
         __write_output(record, pargs, config, "Record.Complete")
-        sys.exit(127)
+        if outfile == sys.stdout:
+            sys.exit(127)
+        else:
+            return None
     else:
         state["Records"][pargs.id] = record
 
-    __write_output(pargs.id, pargs, config, "ID")
+    __write_output(pargs.id, pargs, config, "ID", outfile=outfile)
     # Return the images, with None for the old image.
     return dict(OldImage=None, NewImage={pargs.id: record})
 
 
-def cmd_amend(pargs, state, config):
+def cmd_amend(pargs, state, config, outfile=sys.stdout):
     """
     Amend the properties of a tracked record
     """
     # First, check that the ID specified exists.
     if pargs.id not in state["Records"]:
         print("Specified record ID does not exist.", file=sys.stderr)
-        sys.exit(9)
+        if outfile == sys.stdout:
+            sys.exit(9)
+        else:
+            return None
 
     # If the ID exists, create a new record from the arguments, and then clobber the record pulled
     # from the ledger.
