@@ -79,7 +79,8 @@ def ls(positional_arg):
     pargs.output_format = config.get("OutputFormat", None) if request.args.get(
         "output_format") is None else request.args.get("output_format")
     pargs.pos_id = positional_arg
-    pargs.sort_by = request.args.get("sort_by", default="CommitTime", type=str)
+    pargs.sort_by = request.args.get("sort_by", default="StartTime", type=str)
+    pargs.last = request.args.get("last", default=None, type=int)
     pargs.filter = request.args.get("filter",
                                     default=[],
                                     type=lambda v: __json_type(v, list))

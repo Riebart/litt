@@ -894,6 +894,17 @@ def cmd_ls(pargs, state, config, outfile=sys.stdout):
     try:
         results_list.sort(key=lambda d: d["value"][pargs.sort_by]
                           if pargs.sort_by != "ID" else d["key"])
+        if pargs.last is not None:
+            # If --last was specified, then only take the last N (or first N)
+            # entries, keeping all of the hidden ones.
+            results_list = [
+                result
+                for result in results_list if result.get("__Hidden", False)
+            ] + (lambda l: l[-pargs.last:]
+                 if pargs.last > 0 else l[:-pargs.last])([
+                     result for result in results_list
+                     if not result.get("__Hidden", False)
+                 ])
     except Exception as e:
         print("Error sorting log output.", repr(e), file=sys.stderr)
         sys.exit(12)
@@ -1188,10 +1199,20 @@ def __main():  # pylint: disable=R0915
                      required=False,
                      metavar="<sortkey>",
                      type=__record_sort_keys,
-                     default="CommitTime",
+                     default="StartTime",
                      help="""
-        The record key to use to sort records by. The default is to sort by CommitTime. If an invalid sort key is used, no results are shown and an error is printed showing valid choices."
+        The record key to use to sort records by. The default is to sort by StartTime. If an invalid sort key is used, no results are shown and an error is printed showing valid choices."
         """)
+    cmd.add_argument(
+        "-n",
+        "--last",
+        required=False,
+        metavar="<N>",
+        default=None,
+        type=int,
+        help=
+        """Only display the last N entries, as sorted. A negative value will take the first N entries instead of the last"""
+    )
     cmd.add_argument(
         "-i",
         "--id",
