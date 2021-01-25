@@ -709,8 +709,17 @@ def cmd_amend(pargs, state, config, outfile=sys.stdout):
     """
     Amend the properties of a tracked record
     """
+    if pargs.id is None and state["Stopwatch"] is None:
+        print(
+            "No record ID specified, and no stopwatch running to default to.",
+            file=sys.stderr)
+        if outfile == sys.stdout:
+            sys.exit(9)
+        else:
+            return None
+
     # First, check that the ID specified exists.
-    if pargs.id not in state["Records"]:
+    if pargs.id is not None and pargs.id not in state["Records"]:
         print("Specified record ID does not exist.", file=sys.stderr)
         if outfile == sys.stdout:
             sys.exit(9)
@@ -719,10 +728,18 @@ def cmd_amend(pargs, state, config, outfile=sys.stdout):
 
     # If the ID exists, create a new record from the arguments, and then clobber the record pulled
     # from the ledger.
-    images = dict()
-    images["OldImage"] = {pargs.id: copy.deepcopy(state["Records"][pargs.id])}
-    old_record = state["Records"][pargs.id]
-    record = __update_record(old_record, pargs, state)
+    if pargs.id is None:
+        images = None
+        old_record = state["Stopwatch"]
+        record = __update_record(copy.deepcopy(state["Stopwatch"]), pargs,
+                                 state)
+    else:
+        images = dict()
+        images["OldImage"] = {
+            pargs.id: copy.deepcopy(state["Records"][pargs.id])
+        }
+        old_record = state["Records"][pargs.id]
+        record = __update_record(old_record, pargs, state)
 
     # Reset the timestamps in the record to what the original record was, then we'll replace as
     # necessary based on what is provided in the pargs attributes.
@@ -735,8 +752,11 @@ def cmd_amend(pargs, state, config, outfile=sys.stdout):
     if pargs.end_time is not None:
         record["EndTime"] = __parse_time(pargs.end_time)
 
-    images["NewImage"] = {pargs.id: record}
-    state["Records"][pargs.id] = record
+    if pargs.id is None:
+        state["Stopwatch"] = record
+    else:
+        images["NewImage"] = {pargs.id: record}
+        state["Records"][pargs.id] = record
 
     return images
 
@@ -1152,7 +1172,7 @@ def __main():  # pylint: disable=R0915
     cmd.add_argument(
         "-i",
         "--id",
-        required=True,
+        required=False,
         metavar="<identifier>",
         default=None,
         help="""The unique identifier of the ledger entry to modify.""")
