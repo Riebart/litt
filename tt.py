@@ -16,6 +16,7 @@ Exit codes:
 - 9: Attempt to edit a record with an ID that doesn't exist.
 - 10: A hook failed to execute properly
 - 11: A sortkey was specified for `tt ls`, but the key doesn't exist for one or more items in the log
+- 13: An attempt was made to stop a tracked interval with an ongoing interruption.
 - 127: A dryrun was specified.
 """
 
@@ -187,7 +188,6 @@ def __human_record(record, context=None):
             ret += "Elapsed wall-clock time: %s\n" % __seconds_to_hhmmss(
                 record["EndTime"] - record["StartTime"])
             if "Interruptions" in record and record["Interruptions"] != []:
-                print(record)
                 ret += "Number of interruptions: %s\n" % len(
                     record["Interruptions"])
                 interruption_duration = sum([
@@ -263,10 +263,14 @@ def __write_output(obj,
                     for entry in obj:
                         key = entry["key"]
                         value = entry["value"]
+                        if value.get("__Hidden", False):
+                            continue
                         print("Record \"%s\"" % key, file=outfile)
                         print(__human_record(value, entry_dict), file=outfile)
                 else:
                     for key, value in obj.items():
+                        if value.get("__Hidden", False):
+                            continue
                         print("Record \"%s\"" % key, file=outfile)
                         print(__human_record(value, obj), file=outfile)
         else:
@@ -507,6 +511,13 @@ def cmd_stop(pargs, state, config, outfile=sys.stdout):
     """
     Start a stopwatch to track time against a task
     """
+    if state["Interruption"] is not None:
+        print("Interruption is in progress, ignoring current request",
+              file=sys.stderr)
+        if outfile == sys.stdout:
+            sys.exit(13)
+        else:
+            return None
     if state["Stopwatch"] is None:
         print("Stopwatch not currently running, ignoring current request",
               file=sys.stderr)
@@ -544,6 +555,19 @@ def cmd_sw(pargs, state, config, outfile=sys.stdout):
         return cmd_stop(pargs, state, config, outfile)
 
 
+def cmd_isw(pargs, state, config, outfile=sys.stdout):
+    """
+    Implements the smart interruption stopwatch command which delegates to the interrupt and resume functions based
+    on the current state of the interruption stopwatch.
+    """
+    # Since this is essentially just start or stop, but context sensitive, determine if there is
+    # a stopwatch running, and call the right function.
+    if state["Interruption"] is None:
+        return cmd_interrupt(pargs, state, config, outfile)
+    else:
+        return cmd_resume(pargs, state, config, outfile)
+
+
 def cmd_cancel(pargs, state, config, outfile=sys.stdout):
     """
     Cancels and cleans up any interruption or stopwatch that are currently active.
@@ -559,6 +583,8 @@ def cmd_interrupt(pargs, state, config, outfile=sys.stdout):
     Interrupt an existing stopwatch with a one-at-a-time interrupt timer.
     """
     if state["Stopwatch"] is None:
+        if not hasattr(pargs, "start_time"):
+            pargs.start_time = None
         cmd_start(pargs, state, config, outfile)
     else:
         # Confirm that there are no ongoing interruptions
@@ -838,10 +864,27 @@ def cmd_ls(pargs, state, config, outfile=sys.stdout):
         for sieve in pargs.filter:
             results = __filter_records(sieve, results)
 
-        if not pargs.with_structured_data:
-            for _, val in results.items():
-                if "StructuredData" in val:
-                    del val["StructuredData"]
+    # Now, loop through to find the smallest set containing all of the specified records
+    # and any of their referenced records (i.e. interruptions)
+    more_ids = set([
+        i["Id"] for rec_id, rec in results.items()
+        for i in rec.get("Interruptions", list())
+    ])
+    while more_ids != set():
+        for rec_id in more_ids:
+            results[rec_id] = copy.deepcopy(state["Records"][rec_id])
+            results[rec_id]["__Hidden"] = True
+        more_ids = set([
+            i["Id"] for rec_id, rec in results.items()
+            for i in rec.get("Interruptions", list())
+        ])
+        more_ids = more_ids.difference(set(results.keys()))
+
+    if not pargs.with_structured_data:
+        for _, val in results.items():
+            if "StructuredData" in val:
+                del val["StructuredData"]
+
     if pargs.without_detail:
         for _, val in results.items():
             if "Detail" in val:
@@ -1070,6 +1113,16 @@ def __main():  # pylint: disable=R0915
     __alias_option(cmd)
     __commit_time_options(cmd)
 
+    ################ tt resume
+    cmd = subparsers.add_parser(
+        "isw",
+        help=
+        """Start or stop an interruption stopwatch base on whether one is running or not."""
+    )
+    __property_options(cmd)
+    __alias_option(cmd)
+    __commit_time_options(cmd)
+
     ################ tt track
     cmd = subparsers.add_parser("track",
                                 help="""Track a closed interval of time.""")
@@ -1236,6 +1289,8 @@ def __main():  # pylint: disable=R0915
         images = cmd_stop(pargs, state, config)
     elif pargs.command == "sw":
         images = cmd_sw(pargs, state, config)
+    elif pargs.command == "isw":
+        images = cmd_isw(pargs, state, config)
     elif pargs.command == "cancel":
         cmd_cancel(pargs, state, config)
     elif pargs.command in ["i", "interrupt"]:
