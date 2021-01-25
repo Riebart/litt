@@ -8,17 +8,14 @@ Dim ttArgs
 ttPyPath = WScript.Arguments(0)
 ttCommand = WScript.Arguments(1)
 
-MsgBox(ttCommand)
-
-ttArgs = InputBox("Inputbox")
-
+ttArgs = InputBox("Enter task description")
 If ttArgs <> "" Then
     If InStr(ttArgs, "--") = 0 Then
         ttArgs = """" & ttArgs & """"
     End If
 End If
 
-MsgBox("python3.exe """  & ttPyPath & """ """ & ttCommand & """ " & ttArgs)
+' MsgBox("python3.exe """  & ttPyPath & """ """ & ttCommand & """ " & ttArgs)
 
 Set WshShell = WScript.CreateObject("WScript.Shell")
 WshShell.Run "python3.exe """  & ttPyPath & """ """ & ttCommand & """ " & ttArgs, 0, false
