@@ -890,6 +890,7 @@ def cmd_ls(pargs, state, config, outfile=sys.stdout):
         i["Id"] for rec_id, rec in results.items()
         for i in rec.get("Interruptions", list())
     ])
+    more_ids = more_ids.difference(set(results.keys()))
     while more_ids != set():
         for rec_id in more_ids:
             results[rec_id] = copy.deepcopy(state["Records"][rec_id])
