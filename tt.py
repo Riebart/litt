@@ -638,14 +638,14 @@ def cmd_resume(pargs, state, config, outfile=sys.stdout):
 
 def __parse_time(timespec):
     from dateparser import parse as datetimeparser
-    from tzlocal import get_localzone
+    from dateutil.tz import tzlocal
     dto = datetimeparser(timespec)
     if dto is None:
         print("Unable to parse your timespec \"%s\"." % timespec,
               file=sys.stderr)
         sys.exit(8)
     if dto.tzinfo is None:
-        return dto.replace(tzinfo=get_localzone()).timestamp()
+        return dto.replace(tzinfo=tzlocal()).timestamp()
     return dto.timestamp()
 
 
@@ -804,9 +804,9 @@ def __filter_records(sieve, records):
 
 def __timestamp_to_iso(timestamp):
     from datetime import datetime
-    from tzlocal import get_localzone
+    from dateutil.tz import tzlocal
     return datetime.fromtimestamp(timestamp).replace(
-        tzinfo=get_localzone()).strftime("%FT%T%z")
+        tzinfo=tzlocal()).strftime("%FT%T%z")
 
 
 def __csv_format(records, allrecords, pargs, outfile=sys.stdout):
