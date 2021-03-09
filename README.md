@@ -293,3 +293,20 @@ Hooks are executable files placed in the subdirectories of `~/.litt/hooks`, wher
   - Context: `null`
 - `post_config_write`: After all changes are made to the persistent configuration, and after the config is written to disk.
   - Context: `null`
+
+## Little tricks
+
+### Adding a human timestamp to the JSON file
+
+Sometimes it's useful to be able to edit the JOSN file by hand, but the timestamps are hard to read and interpret for a human. This shell pipeline will insert a new field into each record that adds a human-readable, local-timezone timestamp for each time field in the record.
+
+```bash
+cat events.json | jq . | grep -v 'TimeHuman":' | \
+while read line
+do
+  echo "$line"
+  echo "$line" | grep -c 'Time":' > /dev/null && \
+    echo "\"$(echo "$line" | cut -d '"' -f2 | sed 's/$/Human/')\": \
+      \"$(date -d "@`echo "$line" | cut -d ' ' -f2 | tr -d ','`")\","
+done | less
+```
